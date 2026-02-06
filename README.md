@@ -1,0 +1,1488 @@
+# 智能外呼用户画像系统
+
+> 基于智能外呼通话数据的客户画像分析平台,支持满意度、情感、风险、沟通意愿四维度画像分析
+
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
+[![Vue](https://img.shields.io/badge/Vue-3.0+-brightgreen.svg)](https://vuejs.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+## 目录
+
+- [系统概述](#系统概述)
+- [架构设计](#架构设计)
+- [数据关系](#数据关系)
+- [画像计算口径](#画像计算口径)
+- [后端说明](#后端说明)
+- [前端说明](#前端说明)
+- [部署与启动](#部署与启动)
+- [开发指南](#开发指南)
+
+---
+
+## 系统概述
+
+### 项目背景
+
+本系统是智能外呼平台的用户画像子系统，通过对外呼通话记录的清洗、分析和聚合，构建客户的多维度画像，帮助运营人员了解客户状态、识别风险客户、优化外呼策略。
+
+### 核心功能
+
+| 功能模块 | 描述 |
+|---------|------|
+| **数据同步** | 从线上 MySQL 同步通话记录到画像数据库 |
+| **规则引擎分析** | 基于 ASR 文本进行满意度/情感/风险分析 |
+| **画像聚合** | 按客户+场景+周期聚合计算画像快照 |
+| **统计展示** | 4维度分布图表 + 趋势分析 + 明细列表 |
+
+### 技术栈
+
+| 层级 | 技术选型 |
+|------|---------|
+| **后端框架** | FastAPI + SQLAlchemy 2.0 (async) |
+| **数据库** | PostgreSQL (画像库) + MySQL (源数据库, 只读) |
+| **前端框架** | Vue 3 + TypeScript + Vite |
+| **UI 组件** | Element Plus + ECharts |
+| **容器化** | Docker + Docker Compose |
+
+---
+
+## 架构设计
+
+### 系统架构图
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              智能外呼用户画像系统                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌──────────────┐      ETL 同步         ┌──────────────┐                       │
+│   │              │ ───────────────────► │              │                       │
+│   │  MySQL 源库   │   sync_call_records   │  PostgreSQL  │                       │
+│   │ (线上业务数据) │ ◄─────────────────── │  (画像数据)   │                       │
+│   │              │   get_asr_details     │              │                       │
+│   └──────────────┘                       └──────┬───────┘                       │
+│         │                                       │                               │
+│         │ 通话记录                              │ 画像快照                        │
+│         │ ASR 明细                              │ 场景汇总                        │
+│         │                                       │                               │
+│   ┌─────▼─────────────────────────────────────▼───────────────────┐            │
+│   │                        后端服务 (FastAPI)                       │            │
+│   ├───────────────────────────────────────────────────────────────┤            │
+│   │                                                               │            │
+│   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │            │
+│   │  │ ETL Service │  │Rule Engine  │  │ Portrait    │           │            │
+│   │  │             │  │ Service     │  │ Service     │           │            │
+│   │  │ - 数据同步   │  │ - 满意度分析│  │ - 快照聚合  │           │            │
+│   │  │ - ASR 获取  │  │ - 情感分析  │  │ - 场景汇总  │           │            │
+│   │  │             │  │ - 风险分析  │  │ - 趋势计算  │           │            │
+│   │  └─────────────┘  └─────────────┘  └─────────────┘           │            │
+│   │                                                               │            │
+│   │  ┌────────────────────────────────────────────────────────┐  │            │
+│   │  │                     REST API                            │  │            │
+│   │  │  /task         /task/{id}/summary    /task/{id}/trend   │  │            │
+│   │  │  /task/periods /task/{id}/customers  /admin/*           │  │            │
+│   │  └────────────────────────────────────────────────────────┘  │            │
+│   └───────────────────────────────────────────────────────────────┘            │
+│                                       │                                         │
+│                                       │ HTTP API                                │
+│                                       ▼                                         │
+│   ┌───────────────────────────────────────────────────────────────┐            │
+│   │                       前端应用 (Vue 3)                         │            │
+│   ├───────────────────────────────────────────────────────────────┤            │
+│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │            │
+│   │  │ 统计概览  │ │ 4维度分布 │ │ 趋势图表 │ │   明细列表       │ │            │
+│   │  │ 客户/通话│ │  饼图×4  │ │ 折线图   │ │  筛选/分页/搜索  │ │            │
+│   │  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘ │            │
+│   └───────────────────────────────────────────────────────────────┘            │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 服务调用关系图
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              数据处理流程                                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   1. ETL 数据同步                                                               │
+│   ─────────────────────────────────────────────────────────────────────────     │
+│                                                                                 │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                   │
+│   │   MySQL      │ ──► │  ETL Service │ ──► │ PostgreSQL   │                   │
+│   │ call_record  │     │              │     │ call_record  │                   │
+│   │ _2025_11     │     │ sync_call_   │     │ _enriched    │                   │
+│   │              │     │ records()    │     │              │                   │
+│   └──────────────┘     └──────┬───────┘     └──────────────┘                   │
+│                               │                                                 │
+│                               ▼                                                 │
+│   2. ASR 分析                                                                   │
+│   ─────────────────────────────────────────────────────────────────────────     │
+│                                                                                 │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                   │
+│   │   MySQL      │ ──► │  ETL Service │ ──► │  Rule Engine │                   │
+│   │ call_record  │     │              │     │              │                   │
+│   │ _detail      │     │ batch_fetch_ │     │ analyze_call │                   │
+│   │              │     │ asr_details()│     │ ()           │                   │
+│   └──────────────┘     └──────────────┘     └──────┬───────┘                   │
+│                                                     │                           │
+│                                                     ▼                           │
+│                                            ┌──────────────┐                    │
+│                                            │ PostgreSQL   │                    │
+│                                            │ call_record  │                    │
+│                                            │ _enriched    │                    │
+│                                            │ (更新分析字段)│                    │
+│                                            └──────────────┘                    │
+│                                                     │                           │
+│                                                     ▼                           │
+│   3. 画像聚合                                                                   │
+│   ─────────────────────────────────────────────────────────────────────────     │
+│                                                                                 │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                   │
+│   │ call_record  │ ──► │  Portrait    │ ──► │ user_portrait│                   │
+│   │ _enriched    │     │  Service     │     │ _snapshot    │                   │
+│   │              │     │              │     │              │                   │
+│   │              │     │ compute_     │     │ (按customer+ │                   │
+│   │              │     │ snapshot()   │     │ task+period) │                   │
+│   └──────────────┘     └──────┬───────┘     └──────────────┘                   │
+│                               │                                                 │
+│                               ▼                                                 │
+│   ┌──────────────┐     ┌──────────────┐                                        │
+│   │ user_portrait│ ──► │ task_portrait│                                        │
+│   │ _snapshot    │     │ _summary     │                                        │
+│   │              │     │              │                                        │
+│   │              │     │ (按task+     │                                        │
+│   │              │     │  period)     │                                        │
+│   └──────────────┘     └──────────────┘                                        │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 数据关系
+
+### ER 关系图
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              MySQL 源数据库 (outbound_saas)                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌─────────────────────┐                                                       │
+│   │   autodialer_task   │  任务/场景表                                          │
+│   │─────────────────────│                                                       │
+│   │ PK: uuid (char 36)  │◄──────────────────────────────┐                       │
+│   │     name            │  场景名称                      │                       │
+│   └─────────────────────┘                               │ 1:N                   │
+│                                                          │                       │
+│   ┌──────────────────────────────────┐                  │                       │
+│   │ autodialer_call_record_2025_11   │  通话记录表 (按月分表)                    │
+│   │──────────────────────────────────│                  │                       │
+│   │ PK: id (char 36)                 │                  │                       │
+│   │ FK: task_id ─────────────────────┼──────────────────┘                       │
+│   │     customer_id ★ 画像主体       │◄─────────────────┐                       │
+│   │     callee (手机号)              │                  │                       │
+│   │     callid (通话唯一ID)          │                  │ 1:N                   │
+│   │     calldate, duration, bill     │                  │                       │
+│   │     rounds, hangup_disposition   │                  │                       │
+│   └──────────────────────────────────┘                  │                       │
+│                                                          │                       │
+│   ┌──────────────────────────────────────────┐          │                       │
+│   │ autodialer_call_record_detail_2025_11    │  ASR 明细表                      │
+│   │──────────────────────────────────────────│          │                       │
+│   │ PK: id                                   │          │                       │
+│   │ FK: record_id ───────────────────────────┼──────────┘                       │
+│   │     callid                               │                                  │
+│   │     notify ★ 筛选条件                    │  'asrmessage_notify' = 有效交互  │
+│   │     sequence (对话序号)                  │                                  │
+│   │     question ★ 用户说的话                │                                  │
+│   │     answer_text (ASR 标签)               │                                  │
+│   │     answer_content (机器人回复)          │                                  │
+│   └──────────────────────────────────────────┘                                  │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+                                    │
+                                    │ ETL 同步
+                                    ▼
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           PostgreSQL 画像数据库 (portrait)                       │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌───────────────────────────┐                                                 │
+│   │    period_registry        │  周期注册表                                      │
+│   │───────────────────────────│                                                 │
+│   │ period_type: week/month   │                                                 │
+│   │ period_key: 2025-W48      │                                                 │
+│   │ status: completed         │                                                 │
+│   └───────────────────────────┘                                                 │
+│                                                                                 │
+│   ┌───────────────────────────────────┐                                         │
+│   │      call_record_enriched         │  增强通话记录 (明细层)                   │
+│   │───────────────────────────────────│                                         │
+│   │ callid                            │  ← MySQL call_record.callid            │
+│   │ task_id                           │  ← MySQL call_record.task_id           │
+│   │ user_id ★ customer_id             │  ← MySQL call_record.customer_id       │
+│   │ phone                             │  ← MySQL call_record.callee            │
+│   │ call_date, bill, rounds           │                                         │
+│   │ ─────────────────────────         │                                         │
+│   │ satisfaction ★ 满意度              │  ← 规则引擎分析                         │
+│   │ sentiment ★ 情感                   │  ← 规则引擎分析                         │
+│   │ complaint_risk ★ 投诉风险          │  ← 规则引擎分析                         │
+│   │ churn_risk ★ 流失风险              │  ← 规则引擎分析                         │
+│   │ willingness ★ 沟通意愿             │  ← 规则引擎分析                         │
+│   │ risk_level ★ 综合风险              │  ← 规则引擎分析                         │
+│   └────────────────┬──────────────────┘                                         │
+│                    │ GROUP BY customer_id, task_id, period                      │
+│                    ▼                                                            │
+│   ┌───────────────────────────────────┐                                         │
+│   │    user_portrait_snapshot         │  用户画像快照 (汇总层)                   │
+│   │───────────────────────────────────│                                         │
+│   │ UK: customer_id + task_id +       │                                         │
+│   │     period_type + period_key      │                                         │
+│   │ ─────────────────────────         │                                         │
+│   │ total_calls, connected_calls      │  通话统计                               │
+│   │ avg_duration, avg_rounds          │                                         │
+│   │ ─────────────────────────         │                                         │
+│   │ final_satisfaction ★              │  综合满意度 (最后一次有效)               │
+│   │ final_emotion ★                   │  综合情感 (负面优先)                     │
+│   │ risk_level ★                      │  综合风险 (高优先)                       │
+│   │ willingness ★                     │  综合沟通意愿                           │
+│   └────────────────┬──────────────────┘                                         │
+│                    │ GROUP BY task_id, period                                   │
+│                    ▼                                                            │
+│   ┌───────────────────────────────────┐                                         │
+│   │    task_portrait_summary          │  场景画像汇总 (报表层)                   │
+│   │───────────────────────────────────│                                         │
+│   │ UK: task_id + period_type +       │                                         │
+│   │     period_key                    │                                         │
+│   │ task_name                         │  ← MySQL autodialer_task.name          │
+│   │ ─────────────────────────         │                                         │
+│   │ total_customers, total_calls      │  基础统计                               │
+│   │ ─────────────────────────         │                                         │
+│   │ satisfied_rate ★                  │  满意度趋势分子                         │
+│   │ high_risk_rate ★                  │  风险趋势分子                           │
+│   │ positive_rate ★                   │  情感趋势分子                           │
+│   │ deep_willingness_rate ★           │  沟通意愿趋势分子                       │
+│   └───────────────────────────────────┘                                         │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 聚合维度说明
+
+| 层级 | 表名 | 聚合维度 | 用途 |
+|------|------|---------|------|
+| 明细层 | `call_record_enriched` | 每通电话 | 规则引擎分析输入 |
+| 汇总层 | `user_portrait_snapshot` | `customer_id + task_id + period` | 客户明细列表展示 |
+| 报表层 | `task_portrait_summary` | `task_id + period` | 统计卡片、分布图、趋势图 |
+
+---
+
+## 画像计算口径
+
+### 四维度画像体系
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              用户画像四维度                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌────────────┐│
+│   │    满意度        │  │     风险        │  │     情感        │  │ 沟通意愿   ││
+│   │  Satisfaction   │  │     Risk        │  │    Emotion      │  │ Willingness││
+│   ├─────────────────┤  ├─────────────────┤  ├─────────────────┤  ├────────────┤│
+│   │ • 满意 satisfied│  │ • 流失 churn    │  │ • 正向 positive │  │ • 深度     ││
+│   │ • 一般 neutral  │  │ • 投诉 complaint│  │ • 中性 neutral  │  │ • 一般     ││
+│   │ • 不满意        │  │ • 一般 medium   │  │ • 负向 negative │  │ • 较低     ││
+│   │   unsatisfied   │  │ • 无风险 none   │  │                 │  │            ││
+│   └─────────────────┘  └─────────────────┘  └─────────────────┘  └────────────┘│
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. 满意度 (Satisfaction)
+
+**数据来源优先级**: ASR 标签 > 用户打分 > 关键词匹配
+
+```python
+# 1. ASR 标签识别 (最高优先级)
+SATISFACTION_ASR_TAGS = {
+    'satisfied': ['满分', 'Q7-满分', 'Q9-满分', '非常满意', '很满意'],
+    'unsatisfied': ['非满分', 'Q7-非满分', '不满意', '非常不满意'],
+    'neutral': ['一般', 'Q8', 'default', '还可以'],
+}
+
+# 2. 用户打分识别 (正则匹配)
+SCORE_PATTERNS = {
+    'satisfied': [r'10分', r'十分', r'9分', r'九分', r'满分'],
+    'neutral': [r'8分', r'八分', r'7分', r'七分', r'6分'],
+    'unsatisfied': [r'[0-5]分', r'零分', r'一分', r'两分'],
+}
+
+# 3. 关键词匹配 (兜底)
+SATISFACTION_KEYWORDS = {
+    'satisfied': ['满意', '很好', '不错', '谢谢', '解决了', '处理好了'],
+    'unsatisfied': ['不满意', '不好', '差', '没解决', '失望'],
+    'neutral': ['一般', '还行', '凑合', '马马虎虎'],
+}
+```
+
+**多通电话综合规则**: 取最后一次有效评分
+
+### 2. 风险 (Risk)
+
+**综合风险等级判定**:
+
+```
+if churn_risk == 'high':     → 流失风险 (churn)
+elif complaint_risk == 'high': → 投诉风险 (complaint)
+elif any == 'medium':        → 一般 (medium)
+else:                        → 无风险 (none)
+```
+
+**投诉风险关键词**:
+
+| 等级 | 关键词示例 |
+|------|-----------|
+| high | 投诉、举报、工信部、12315、骗人、垃圾、找领导、起诉、律师 |
+| medium | 不满意、太差、故障、没解决、乱收费、态度差、失望 |
+
+**流失风险关键词**:
+
+| 等级 | 关键词示例 |
+|------|-----------|
+| high | 不用了、取消、退订、销户、换运营商、携号转网、换套餐 |
+| medium | 考虑、太贵、划不来、很少用、别家 |
+
+**升级规则**: 命中 ≥3 个 medium 关键词 → 升级为 high
+
+**多通电话综合规则**: 高风险优先
+
+### 3. 情感 (Emotion)
+
+**情感关键词**:
+
+| 类型 | 关键词示例 |
+|------|-----------|
+| positive | 好、谢谢、满意、不错、解决了、专业、耐心 |
+| negative | 差、烦、投诉、问题、故障、骗、垃圾、失望 |
+| neutral | 哦、嗯、知道了、好吧、行吧 |
+
+**判定规则**:
+
+```python
+if negative_count > 0:   → negative  # 负面优先
+elif positive_count > 0: → positive
+else:                    → neutral
+```
+
+**多通电话综合规则**: 负面优先（有一次负面就算负面）
+
+### 4. 沟通意愿 (Willingness)
+
+**判定规则**:
+
+| 等级 | 判定条件 |
+|------|---------|
+| 深度 | 通话时长 > 60秒 **或** 交互轮次 > 5 |
+| 较低 | 通话时长 < 20秒 **且** 交互轮次 < 3 |
+| 一般 | 其他情况 |
+
+**多通电话综合规则**: 基于平均通话时长和平均交互轮次
+
+### 趋势指标计算口径
+
+| 趋势维度 | 分子 | 分母 | 说明 |
+|---------|------|------|------|
+| 满意度趋势 | satisfied 客户数 | 有满意度数据的客户总数 | 满意比例 |
+| 风险趋势 | churn + complaint 客户数 | 总客户数 | 高风险比例 |
+| 情感趋势 | positive 客户数 | 有情感数据的客户总数 | 正向比例 |
+| 沟通意愿趋势 | 深度沟通客户数 | 总客户数 | 深度沟通比例 |
+
+---
+
+## 后端说明
+
+### 项目结构
+
+```
+src/
+├── api/                    # API 层
+│   └── v1/
+│       ├── task.py         # 场景/任务相关接口
+│       ├── admin.py        # 管理接口
+│       └── periods.py      # 周期接口
+├── core/
+│   ├── config.py           # 配置管理
+│   └── database.py         # 数据库连接
+├── models/                 # 数据模型
+│   └── portrait/
+│       ├── call_enriched.py   # 增强通话记录
+│       ├── snapshot.py        # 用户画像快照
+│       └── task_summary.py    # 场景画像汇总
+├── services/               # 业务服务
+│   ├── etl_service.py         # ETL 数据同步
+│   ├── rule_engine_service.py # 规则引擎分析
+│   ├── portrait_service.py    # 画像计算
+│   └── period_service.py      # 周期管理
+├── schemas/                # Pydantic 模型
+│   └── response.py
+├── tasks/
+│   └── scheduler.py        # 定时任务
+└── main.py                 # 应用入口
+```
+
+### API 接口列表
+
+#### 场景/任务接口
+
+| 接口 | 方法 | 描述 |
+|------|------|------|
+| `/api/v1/task/periods` | GET | 获取可用周期列表 |
+| `/api/v1/task` | GET | 获取场景列表（支持按周期筛选） |
+| `/api/v1/task/{id}/summary` | GET | 获取场景统计汇总 |
+| `/api/v1/task/{id}/trend` | GET | 获取场景趋势数据 |
+| `/api/v1/task/{id}/customers` | GET | 获取客户明细列表（支持筛选） |
+
+#### 管理接口
+
+| 接口 | 方法 | 描述 |
+|------|------|------|
+| `/api/v1/admin/status` | GET | 系统状态 |
+| `/api/v1/admin/sync` | POST | 手动触发数据同步 |
+| `/api/v1/admin/compute` | POST | 手动触发画像计算 |
+| `/api/v1/admin/sync-task-names` | POST | 同步场景名称 |
+
+### 服务模块说明
+
+#### ETL Service (`etl_service.py`)
+
+```python
+class ETLService:
+    """数据同步服务"""
+    
+    async def sync_call_records(target_date: date) -> dict:
+        """
+        同步指定日期的通话记录
+        1. 从 MySQL 读取通话记录
+        2. 写入 PostgreSQL call_record_enriched
+        3. 获取 ASR 详情并调用规则引擎分析
+        """
+    
+    async def analyze_call_records(target_date: date) -> int:
+        """
+        分析指定日期的通话记录
+        1. 批量获取 ASR 详情
+        2. 调用规则引擎分析
+        3. 批量更新分析结果
+        """
+```
+
+#### Rule Engine Service (`rule_engine_service.py`)
+
+```python
+class RuleEngineService:
+    """规则引擎服务 - 基于关键词和规则进行分析"""
+    
+    def analyze_call(
+        user_text: str,
+        asr_labels: list[str],
+        duration: int,
+        rounds: int
+    ) -> AnalysisResult:
+        """
+        分析单通电话
+        返回: satisfaction, emotion, complaint_risk, churn_risk, willingness, risk_level
+        """
+    
+    def aggregate_multi_calls(call_results: list[dict]) -> dict:
+        """
+        多通电话综合规则
+        - 满意度：取最后一次有效评分
+        - 情感：负面优先
+        - 风险：高优先
+        - 沟通意愿：基于平均值
+        """
+```
+
+#### Portrait Service (`portrait_service.py`)
+
+```python
+class PortraitService:
+    """画像计算服务"""
+    
+    async def compute_snapshot(period_type: str, period_key: str) -> dict:
+        """
+        计算用户画像快照
+        1. 按 (customer_id, task_id) 聚合 call_record_enriched
+        2. 应用多通电话综合规则
+        3. 批量 UPSERT 到 user_portrait_snapshot
+        """
+    
+    async def compute_task_summary(period_type: str, period_key: str) -> dict:
+        """
+        计算场景画像汇总
+        1. 按 task_id 聚合 user_portrait_snapshot
+        2. 计算各维度占比
+        3. UPSERT 到 task_portrait_summary
+        """
+```
+
+### 定时任务配置
+
+| 任务 | 默认时间 | 功能 |
+|------|---------|------|
+| 数据同步 | 02:00 | 同步前一天通话记录 + ASR 分析 |
+| 画像计算 | 06:00 | 计算周/月/季度快照和汇总 |
+
+配置方式:
+
+```env
+SCHEDULER_ENABLED=true
+SYNC_CRON_HOUR=2
+SYNC_CRON_MINUTE=0
+```
+
+---
+
+## 前端说明
+
+### 项目结构
+
+```
+web/
+├── src/
+│   ├── api/
+│   │   └── index.ts        # API 封装
+│   ├── types/
+│   │   └── index.ts        # TypeScript 类型定义
+│   ├── views/
+│   │   └── PortraitDashboard.vue  # 主页面
+│   ├── App.vue
+│   └── main.ts
+├── package.json
+└── vite.config.ts
+```
+
+### 页面功能模块
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  人群画像统计与分析                                                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌────────────────────────────────────────────────────────────────────────────┐│
+│  │ 筛选条: [选择场景 ▼] [选择周 ▼] [刷新]                                      ││
+│  └────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                            │
+│  │  总客户数     │ │  总通话数     │ │  平均时长     │   ← 统计概览卡片           │
+│  │    4,284     │ │    5,120     │ │    45.5秒    │                            │
+│  └──────────────┘ └──────────────┘ └──────────────┘                            │
+│                                                                                 │
+│  ┌────────────────────────────────────────────────────────────────────────────┐│
+│  │ 满意度分布 │ 风险分布 │ 情感分布 │ 沟通意愿分布 │   ← 4维度分布饼图           ││
+│  │   [饼图]   │  [饼图]  │  [饼图]  │    [饼图]    │                            ││
+│  └────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+│  ┌────────────────────────────────────────────────────────────────────────────┐│
+│  │ 画像趋势变化（4个维度）                           [最近4周 ▼]                ││
+│  │ ┌────────────────────────────────────────────────────────────────────────┐││
+│  │ │                          [折线图]                                      │││
+│  │ │  ── 满意度  ── 风险  ── 正向情感  ── 深度沟通                          │││
+│  │ └────────────────────────────────────────────────────────────────────────┘││
+│  └────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+│  ┌────────────────────────────────────────────────────────────────────────────┐│
+│  │ 用户画像明细列表                                                           ││
+│  │ ┌────────────────────────────────────────────────────────────────────────┐││
+│  │ │ [手机号搜索] [满意度 ▼] [情感 ▼] [风险 ▼] [沟通意愿 ▼]   ← 筛选器        │││
+│  │ └────────────────────────────────────────────────────────────────────────┘││
+│  │ ┌────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐││
+│  │ │ 客户ID │ 手机号  │ 场景   │ 通话数 │ 平均时长│ 满意度 │ 情感   │ 风险   │ 沟通意愿 │││
+│  │ ├────────┼────────┼────────┼────────┼────────┼────────┼────────┼────────┤││
+│  │ │ ...    │ ...    │ ...    │ ...    │ ...    │ 满意   │ 正向   │ 无风险 │ 深度   │││
+│  │ └────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘││
+│  │                                           [< 1 2 3 ... >]   ← 分页         ││
+│  └────────────────────────────────────────────────────────────────────────────┘│
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### API 调用流程
+
+```typescript
+// 1. 初始化加载
+onMounted(async () => {
+  await loadAvailablePeriods()  // GET /task/periods
+  await loadTasks()              // GET /task?period_key=xxx
+  await loadData()               // 并行加载汇总、趋势、客户列表
+})
+
+// 2. 加载汇总数据
+async function loadSummary() {
+  // GET /task/{id}/summary?period_type=week&period_key=2025-W48
+}
+
+// 3. 加载趋势数据 (4个维度)
+async function loadTrends() {
+  await Promise.all([
+    fetchTaskTrend(taskId, 'week', 'satisfied_rate', limit),
+    fetchTaskTrend(taskId, 'week', 'high_risk_rate', limit),
+    fetchTaskTrend(taskId, 'week', 'positive_rate', limit),
+    fetchTaskTrend(taskId, 'week', 'deep_willingness_rate', limit),
+  ])
+}
+
+// 4. 加载客户列表 (支持筛选)
+async function loadCustomers() {
+  // GET /task/{id}/customers?period_type=week&period_key=2025-W48
+  //     &phone=xxx&satisfaction=satisfied&emotion=positive
+  //     &risk_level=none&willingness=深度
+}
+```
+
+### 关键组件说明
+
+| 组件 | 功能 | 数据来源 |
+|------|------|---------|
+| 统计概览卡片 | 显示总客户/通话/时长 | `/task/{id}/summary` |
+| 4维度分布饼图 | 各维度占比可视化 | `/task/{id}/summary` |
+| 趋势折线图 | 4维度趋势变化 | `/task/{id}/trend` × 4 |
+| 明细列表 | 客户画像详情 + 筛选 | `/task/{id}/customers` |
+
+---
+
+## 部署与启动
+
+### 📋 环境要求
+
+- **Python**: 3.11+
+- **Node.js**: 18+
+- **Docker**: 用于运行PostgreSQL数据库
+- **uv**: Python包管理器 (推荐) 或 pip
+
+### 🚀 快速启动 (本地开发)
+
+#### 1. 克隆项目
+
+```bash
+git clone https://github.com/your-username/portrait.git
+cd portrait
+```
+
+#### 2. 安装依赖
+
+**后端依赖**:
+
+```bash
+# 使用 uv (推荐)
+uv sync
+
+# 或使用 pip
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**前端依赖**:
+
+```bash
+cd web
+npm install
+cd ..
+```
+
+#### 3. 配置环境变量
+
+```bash
+# 复制环境变量模板
+cp .env.example .env
+
+# 编辑 .env 文件 (可选,默认配置即可运行)
+# 如果只是体验系统,无需修改
+```
+
+#### 4. 启动数据库
+
+```bash
+# 启动 PostgreSQL (使用 Docker)
+docker compose -f docker/docker-compose.yml up -d postgres
+```
+
+#### 5. 初始化数据库
+
+```bash
+# 创建数据库表
+uv run python scripts/init_db.py
+
+# 或使用 Alembic 迁移
+uv run alembic upgrade head
+```
+
+#### 6. 启动服务
+
+**方式1: 一键启动 (推荐)**
+
+```bash
+sh scripts/start_all.sh
+```
+
+**方式2: 分别启动**
+
+```bash
+# 终端1: 启动后端
+uv run uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 终端2: 启动前端
+cd web
+npm run dev
+```
+
+#### 7. 访问系统
+
+- **前端**: <http://localhost:3001>
+- **后端API文档**: <http://localhost:8000/docs>
+- **健康检查**: <http://localhost:8000/health>
+
+### 📊 加载示例数据 (可选)
+
+如果你想体验完整功能,可以加载示例数据:
+
+```bash
+# 加载示例数据到数据库
+uv run python scripts/load_demo_data.py
+```
+
+### 🛑 停止服务
+
+```bash
+# 停止所有服务
+sh scripts/stop_all.sh
+
+# 停止并清理 Docker
+sh scripts/stop_all.sh --all
+```
+
+---
+
+## 🚀 生产环境部署
+>
+> [!IMPORTANT]
+> **离线部署**: 云端服务器位于私域网络,无法访问外网拉取 Docker 镜像和依赖包
+
+#### 部署架构
+
+```
+本地开发机 (M1 Mac)          云端服务器 (Ubuntu)
+     │                              │
+     ├─ 1. 构建并打包镜像           │
+     ├─ 2. 传输 ──────────────────→ │
+     │                              ├─ 3. 导入并部署
+     │                              └─ 4. 访问系统
+```
+
+#### 步骤 1: 本地构建并打包
+
+```bash
+# 在本地开发机执行
+cd /path/to/portrait
+
+# 一键构建并打包所有镜像
+./scripts/build_and_export.sh
+```
+
+**脚本功能**:
+
+- ✅ 自动检查 Docker Buildx 环境
+- ✅ 创建跨平台构建器
+- ✅ 构建后端 API 镜像 (portrait-api:latest)
+- ✅ 构建前端 Web 镜像 (portrait-web:latest)
+- ✅ 拉取 PostgreSQL 镜像 (postgres:15-alpine)
+- ✅ 验证镜像平台架构为 linux/amd64
+- ✅ 导出所有镜像为 tar 文件
+
+**输出文件**: `files/portrait-images.tar` (约 500MB)
+
+**预计耗时**: 5-10 分钟(首次构建)
+
+#### 步骤 2: 传输到云端服务器
+
+选择以下任一方式传输镜像文件:
+
+**方式 1: scp 命令**
+
+```bash
+# 注意：实际文件名带有时间戳，如 portrait-images_20260106_152730.tar.gz
+scp files/portrait-images_*.tar.gz user@your-server:/home/user/
+```
+
+**方式 2: rsync 命令 (支持断点续传，推荐大文件)**
+
+```bash
+rsync -avP files/portrait-images_*.tar.gz user@your-server:/home/user/
+```
+
+**方式 3: 物理传输**
+
+- 使用 U盘/移动硬盘复制文件到云端服务器
+
+#### 步骤 3: 远端服务器准备
+
+> [!NOTE]
+> 打包文件 `portrait-images_*.tar.gz` 已包含所有必需文件（镜像、配置、脚本），无需额外克隆代码
+
+**SSH 登录到远端服务器后执行：**
+
+```bash
+# 创建项目目录
+mkdir -p /home/user/portrait
+cd /home/user/portrait
+
+# 将打包文件移动到项目目录（如果不在此目录）
+mv ~/portrait-images_*.tar.gz .
+```
+
+#### 步骤 4: 解压并部署
+
+```bash
+# 解压打包文件
+tar -xzf portrait-images_*.tar.gz
+
+# 赋予脚本执行权限
+chmod +x scripts/*.sh
+
+# 一键导入镜像并启动服务
+./scripts/deploy_remote.sh portrait-images_*.tar.gz
+```
+
+**打包文件包含：**
+
+- ✅ Docker 镜像（portrait-api、portrait-web、postgres）
+- ✅ `docker-compose.prod.yml`（编排配置）
+- ✅ `.env`（环境变量）
+- ✅ `scripts/deploy_remote.sh`（部署脚本）
+- ✅ `scripts/check_access.sh`（访问检测脚本）
+
+**部署脚本功能**:
+
+- ✅ 解压并导入所有 Docker 镜像
+- ✅ 验证镜像完整性和架构
+- ✅ 复制环境变量配置文件
+- ✅ 启动 Docker Compose 服务
+- ✅ 执行健康检查
+- ✅ 显示访问地址
+
+#### 步骤 5: 配置环境变量
+
+首次部署时,脚本会自动从打包文件中提取 `.env` 文件。如需修改配置:
+
+```bash
+vim .env
+```
+
+**必需配置**:
+
+```env
+# MySQL 源数据库(连接线上外呼系统)
+MYSQL_HOST=your_mysql_host
+MYSQL_PORT=3306
+MYSQL_USER=readonly_user
+MYSQL_PASSWORD=your_password
+MYSQL_DB=outbound_saas
+
+# PostgreSQL 画像数据库
+POSTGRES_USER=portrait
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_DB=portrait
+```
+
+配置完成后,重启服务:
+
+```bash
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
+```
+
+#### 步骤 6: 初始化数据库
+
+```bash
+# 运行数据库迁移
+docker compose -f docker-compose.prod.yml exec portrait-api alembic upgrade head
+
+# 或使用初始化脚本（如果 alembic 失败）
+docker compose -f docker-compose.prod.yml exec portrait-api python scripts/init_db.py
+```
+
+#### 步骤 7: 验证部署并获取访问地址
+
+```bash
+# 运行访问检测脚本
+./scripts/check_access.sh
+```
+
+**检测脚本会自动：**
+
+- ✅ 获取服务器内网 IP 和公网 IP
+- ✅ 检测 Docker 容器运行状态
+- ✅ 检测端口监听状态（80/8000/5432）
+- ✅ 执行服务健康检查
+- ✅ 检测防火墙配置
+- ✅ 生成访问地址
+
+**访问地址示例：**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  前端访问地址                                            │
+├──────────────────────────────────────────────────────────┤
+│  局域网: http://192.168.1.100                            │
+│  公网:   http://123.45.67.89                             │
+│  本机:   http://localhost                                │
+├──────────────────────────────────────────────────────────┤
+│  API 文档                                                │
+├──────────────────────────────────────────────────────────┤
+│  局域网: http://192.168.1.100:8000/docs                  │
+│  公网:   http://123.45.67.89:8000/docs                   │
+│  本机:   http://localhost:8000/docs                      │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### 步骤 8: 配置防火墙（如无法访问）
+
+如果检测脚本提示防火墙端口未开放，需要执行：
+
+**Ubuntu/Debian (UFW):**
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 8000/tcp
+sudo ufw status
+```
+
+**CentOS/RHEL (firewalld):**
+
+```bash
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=8000/tcp
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-ports
+```
+
+**云服务器安全组:**
+
+如果使用阿里云/腾讯云等云服务器，还需要在云控制台的**安全组**中添加入站规则：
+
+- TCP 80（前端）
+- TCP 8000（后端 API）
+
+---
+
+### ✅ 验证部署
+
+部署完成后，可以使用验证脚本来测试完整的数据处理流程：
+
+#### 使用验证脚本
+
+```bash
+# 基本用法（使用默认参数）
+bash scripts/verify_deployment.sh
+
+# 指定 API 地址和日期
+bash scripts/verify_deployment.sh --api-url http://your-server:8000 --date 2025-11-05
+
+# 跳过数据同步，仅验证现有数据
+bash scripts/verify_deployment.sh --skip-sync
+
+# 查看帮助
+bash scripts/verify_deployment.sh --help
+```
+
+#### 参数说明
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--api-url URL` | API 服务地址 | `http://localhost:8000` |
+| `--date DATE` | 同步日期（格式：YYYY-MM-DD） | 昨天 |
+| `--skip-sync` | 跳过数据同步步骤 | false |
+| `--help` | 显示帮助信息 | - |
+
+#### 验证流程
+
+脚本会自动执行以下验证步骤：
+
+1. **检查 API 服务** - 验证 API 健康状态
+2. **获取系统状态** - 显示数据库连接、已计算周期数等
+3. **同步通话记录** - 从源数据库同步指定日期的数据
+4. **计算用户画像快照** - 聚合计算用户画像
+5. **计算场景汇总** - 生成场景统计数据
+6. **同步任务名称** - 更新任务/场景名称
+7. **验证数据** - 检查周期列表和任务数据
+
+#### 依赖要求
+
+验证脚本需要以下工具（通常系统已预装）：
+
+- `curl` - HTTP 请求工具
+- `jq` - JSON 解析工具
+
+如果缺少 `jq`，请安装：
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install jq
+
+# CentOS/RHEL
+sudo yum install jq
+
+# macOS
+brew install jq
+```
+
+#### 示例输出
+
+```
+============================================================
+  Portrait 部署验证
+============================================================
+  API 地址: http://localhost:8000
+  同步日期: 2025-11-05
+  周期编号: 2025-W45
+============================================================
+
+============================================================
+  步骤 0: 检查 API 服务
+============================================================
+
+  ✅ 成功: API 服务正常 - ok
+
+============================================================
+  步骤 1: 获取系统状态
+============================================================
+
+  系统状态: healthy
+  数据库:   connected
+  源数据库: connected
+  已计算周期数: 12
+  画像快照总数: 4284
+  增强记录总数: 15620
+
+  ✅ 成功: 系统状态获取成功
+
+...
+
+============================================================
+  ✅ 部署验证通过!
+============================================================
+```
+
+---
+
+### 🔄 更新部署
+
+当代码更新后,重新部署:
+
+```bash
+# 本地: 重新构建并打包
+./scripts/build_and_export.sh
+
+# 传输到云端后
+# 云端: 停止服务、重新部署
+docker-compose -f docker-compose.prod.yml down
+./scripts/deploy_remote.sh portrait-images.tar
+```
+
+---
+
+### 📊 数据清洗与同步
+
+部署完成后，需要触发数据同步将源数据库（MySQL）的通话记录清洗到画像数据库（PostgreSQL）。
+
+#### 自动同步（定时任务）
+
+系统使用 **APScheduler** 管理定时任务：
+
+| 任务 | 执行时间 | 说明 |
+|------|---------|------|
+| **数据同步** | 每天 02:00 | 同步前一天的通话记录 |
+| **规则分析** | 每天 02:30 | 分析未处理的记录 |
+| **周期快照** | 每天 06:00 | 周一计算周快照，1号计算月快照 |
+| **场景汇总** | 每天 06:30 | 计算场景统计 |
+
+**环境变量配置**（`.env` 文件）：
+
+```env
+SCHEDULER_ENABLED=true
+SCHEDULER_TIMEZONE=Asia/Shanghai
+SYNC_CRON_HOUR=2
+SYNC_CRON_MINUTE=0
+```
+
+#### 手动触发同步
+
+**方式 1: 通过 API（推荐）**
+
+```bash
+# 同步指定日期的数据
+curl -X POST http://localhost:8000/api/v1/admin/sync \
+  -H "Content-Type: application/json" \
+  -d '{"date": "2025-11-01"}'
+```
+
+**方式 2: 通过 API 文档界面**
+
+1. 访问 `http://localhost:8000/docs`
+2. 找到 `/api/v1/admin/sync` 接口
+3. 点击 "Try it out"，输入日期，点击 "Execute"
+
+**方式 3: 批量同步历史数据**
+
+```bash
+# 循环同步多天数据
+for date in 2025-11-{01..30}; do
+  curl -X POST http://localhost:8000/api/v1/admin/sync \
+    -H "Content-Type: application/json" \
+    -d "{\"date\": \"$date\"}"
+  sleep 5  # 避免过载
+done
+```
+
+#### 验证同步结果
+
+```bash
+# 查看同步的记录数
+docker exec portrait-postgres psql -U portrait -d portrait -c "
+SELECT call_date, COUNT(*) as count
+FROM call_record_enriched
+GROUP BY call_date
+ORDER BY call_date DESC LIMIT 10;
+"
+```
+
+---
+
+### 🛠️ 运维命令
+
+```bash
+# 查看服务状态
+docker-compose -f docker-compose.prod.yml ps
+
+# 查看日志
+docker-compose -f docker-compose.prod.yml logs -f
+
+# 查看特定服务日志
+docker-compose -f docker-compose.prod.yml logs -f portrait-api
+
+# 重启服务
+docker-compose -f docker-compose.prod.yml restart
+
+# 停止服务
+docker-compose -f docker-compose.prod.yml down
+
+# 停止并删除数据卷(危险操作)
+docker-compose -f docker-compose.prod.yml down -v
+```
+
+---
+
+### 🐛 常见问题排查
+
+#### 问题 1: 容器启动失败 - 日志权限错误
+
+**错误信息**:
+
+```
+PermissionError: [Errno 13] Permission denied: '/app/logs/portrait.log'
+```
+
+**原因**: 宿主机的 `logs` 目录不存在或权限不足。
+
+**解决方案**:
+
+```bash
+# 停止服务
+docker compose -f docker-compose.prod.yml down
+
+# 创建日志目录并设置权限
+mkdir -p logs
+chmod 777 logs
+
+# 重新启动
+docker compose -f docker-compose.prod.yml up -d
+```
+
+**永久解决**: 重新构建镜像（已在 Dockerfile 中修复）。
+
+---
+
+#### 问题 2: PostgreSQL 连接被拒绝
+
+**错误信息**:
+
+```
+ConnectionRefusedError: [Errno 111] Connection refused
+```
+
+**原因**: 环境变量配置错误，应用使用了 `localhost` 而不是容器名称。
+
+**检查配置**:
+
+```bash
+# 1. 查看 .env 文件
+cat .env | grep POSTGRES_HOST
+
+# 应该是: POSTGRES_HOST=portrait-postgres
+# 而不是: POSTGRES_HOST=localhost
+```
+
+**解决方案**:
+
+确保 `.env` 文件中的配置正确：
+
+```env
+# PostgreSQL (Docker 环境必须使用容器名称)
+POSTGRES_HOST=portrait-postgres  # 重要！
+POSTGRES_PORT=5432
+POSTGRES_USER=portrait
+POSTGRES_PASSWORD=portrait123
+POSTGRES_DB=portrait
+```
+
+重启服务：
+
+```bash
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
+```
+
+---
+
+#### 问题 3: 容器健康检查失败
+
+**症状**: `docker compose ps` 显示 `unhealthy` 或不断重启。
+
+**诊断步骤**:
+
+```bash
+# 1. 查看容器状态
+docker compose -f docker-compose.prod.yml ps
+
+# 2. 查看详细日志
+docker compose -f docker-compose.prod.yml logs --tail=100 portrait-api
+
+# 3. 检查健康检查状态
+docker inspect portrait-api --format='{{.State.Health.Status}}'
+
+# 4. 查看健康检查日志
+docker inspect portrait-api --format='{{range .State.Health.Log}}{{.Output}}{{end}}'
+```
+
+**常见原因**:
+
+- 数据库连接失败（见问题 2）
+- 日志目录权限问题（见问题 1）
+- 端口被占用
+
+---
+
+#### 问题 4: MySQL 连接失败（可忽略）
+
+**说明**: MySQL 是可选的，仅用于数据同步。如果没有 MySQL，系统仍可正常启动。
+
+**临时配置** (如果没有 MySQL):
+
+```env
+# 使用占位符，不影响启动
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=test
+MYSQL_PASSWORD=test
+MYSQL_DB=test
+```
+
+---
+
+#### 问题 5: 镜像构建失败
+
+**错误**: `ERROR: failed to solve: failed to compute cache key`
+
+**解决方案**:
+
+```bash
+# 清理 Docker 构建缓存
+docker builder prune -af
+
+# 重新构建
+./scripts/build_and_export.sh
+```
+
+---
+
+#### 问题 6: 跨平台构建器创建失败
+
+**错误**: `ERROR: Multiple platforms feature is currently not supported`
+
+**解决方案**:
+
+```bash
+# 确保 Docker Desktop 已启用 containerd
+# 设置 -> Docker Engine -> 启用 containerd
+
+# 或手动创建构建器
+docker buildx create --name multiarch --driver docker-container --use
+docker buildx inspect --bootstrap
+```
+
+---
+
+#### 问题 7: 服务启动后无法从外部访问
+
+**检查清单**:
+
+```bash
+# 1. 检查容器是否正常运行
+docker compose -f docker-compose.prod.yml ps
+
+# 2. 检查端口监听
+ss -tlnp | grep -E ':(80|8000)'
+
+# 3. 测试本地访问
+curl http://localhost:8000/health
+
+# 4. 检查防火墙
+sudo ufw status  # Ubuntu
+sudo firewall-cmd --list-ports  # CentOS
+```
+
+**解决方案**: 参见步骤 8 的防火墙配置。
+
+---
+
+### 🔧 诊断工具
+
+使用诊断脚本快速排查问题：
+
+```bash
+# 运行诊断脚本（需要重新打包才有）
+./scripts/diagnose_deployment.sh
+```
+
+或手动诊断：
+
+```bash
+# 完整诊断命令
+echo "=== 容器状态 ==="
+docker compose -f docker-compose.prod.yml ps
+
+echo "=== API 日志 ==="
+docker compose -f docker-compose.prod.yml logs --tail=50 portrait-api
+
+echo "=== 环境变量 ==="
+cat .env | grep -E "POSTGRES_|MYSQL_"
+
+echo "=== 健康检查 ==="
+curl http://localhost:8000/health
+
+echo "=== 数据库连接 ==="
+docker exec portrait-postgres pg_isready -U portrait
+```
+
+---
+
+### ⚙️ 环境变量说明
+
+#### 必需配置
+
+如果你有自己的MySQL数据源,需要配置:
+
+```env
+# MySQL 源数据库 (外呼系统数据)
+MYSQL_HOST=your_mysql_host
+MYSQL_PORT=3306
+MYSQL_USER=readonly_user
+MYSQL_PASSWORD=your_password
+MYSQL_DB=outbound_saas
+```
+
+#### 可选配置
+
+```env
+# PostgreSQL (默认即可)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=portrait
+POSTGRES_PASSWORD=portrait123
+POSTGRES_DB=portrait
+
+# 日志级别
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+
+# 调试模式
+DEBUG=true  # 开发环境: true, 生产环境: false
+```
+
+### 💡 提示
+
+- **首次启动**: 数据库初始化可能需要几秒钟
+- **开发模式**: 代码修改后会自动重载 (热更新)
+- **日志查看**: 开发环境日志会同时输出到控制台和文件
+- **数据持久化**: 数据库数据存储在 Docker volume 中,停止容器不会丢失
+
+---
+
+## 开发指南
+
+### 添加新的画像维度
+
+1. **更新规则引擎** (`src/services/rule_engine_service.py`)
+   - 添加关键词库
+   - 实现分析方法
+   - 更新 `AnalysisResult` 数据类
+
+2. **更新数据模型**
+   - `call_record_enriched`: 添加明细字段
+   - `user_portrait_snapshot`: 添加汇总字段
+   - `task_portrait_summary`: 添加报表字段
+
+3. **更新服务层**
+   - `etl_service.py`: 更新批量更新 SQL
+   - `portrait_service.py`: 更新聚合查询
+
+4. **更新 API**
+   - `task.py`: 更新响应模型和查询
+
+5. **更新前端**
+   - `types/index.ts`: 更新类型定义
+   - `PortraitDashboard.vue`: 添加展示组件
+
+### 测试
+
+```bash
+# 后端测试
+pytest tests/
+
+# 前端测试
+cd web && npm run test
+```
+
+---
+
+## 更新日志
+
+### v1.0.0 (2025-12-16)
+
+- ✅ 完成四维度画像体系（满意度、风险、情感、沟通意愿）
+- ✅ 实现规则引擎分析（替代大模型，提升性能）
+- ✅ 前端交互优化（场景优先、周期筛选、明细筛选）
+- ✅ 趋势图支持4维度展示
+- ✅ 数据重建脚本支持一键清洗
+
+---
+
+## 维护联系
+
+如有问题，请联系项目维护人员。
