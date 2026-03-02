@@ -48,6 +48,7 @@ def upgrade() -> None:
         sa.Column("churn_risk", sa.String(16), nullable=True, comment="流失风险"),
         sa.Column("satisfaction", sa.String(16), nullable=True, comment="满意度"),  # 新增
         sa.Column("satisfaction_source", sa.String(64), nullable=True, comment="满意度来源"),  # 新增
+
         sa.Column("willingness", sa.String(16), nullable=True, comment="沟通意愿"),  # 新增
         sa.Column("risk_level", sa.String(16), nullable=True, comment="综合风险"),  # 新增
         sa.Column("llm_analyzed_at", sa.DateTime(timezone=True), nullable=True, comment="LLM分析时间"),

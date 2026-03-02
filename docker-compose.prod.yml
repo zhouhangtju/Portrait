@@ -75,6 +75,7 @@ services:
     volumes:
       - ./logs:/app/logs # 日志目录挂载
       - ./src:/app/src
+
     depends_on:
       portrait-postgres:
         condition: service_healthy

@@ -4,6 +4,7 @@ Portrait 用户数据画像服务
 FastAPI 应用入口
 """
 import sys
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request

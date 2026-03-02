@@ -88,7 +88,6 @@ class ETLService:
 
         logger.info(f"同步完成: {synced_count} 条记录")
 
-
         # 分析已同步的记录（获取 ASR 并进行规则分析）
         if synced_count > 0:
             analyzed_count = await self.analyze_call_records(target_date)

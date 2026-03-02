@@ -67,6 +67,7 @@ class TaskScheduler:
             self._job_sync_today_records,
             trigger=CronTrigger(
                 # hour=settings.sync_cron_hour,
+
                 minute=settings.sync_cron_minute,
             ),
             id="sync_call_records",
@@ -90,6 +91,7 @@ class TaskScheduler:
             self._job_check_period_snapshot,
             trigger=CronTrigger(hour=6, minute=0),
             # trigger=CronTrigger(hour=15, minute=1),
+
             id="check_period_snapshot",
             name="检查并计算周期快照",
             replace_existing=True,

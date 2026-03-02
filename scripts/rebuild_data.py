@@ -52,6 +52,7 @@ async def add_new_columns():
                 ADD COLUMN IF NOT EXISTS satisfaction_source VARCHAR(64),
                 ADD COLUMN IF NOT EXISTS willingness VARCHAR(16),
                 ADD COLUMN IF NOT EXISTS risk_level VARCHAR(16),
+
                 ADD COLUMN IF NOT EXISTS qa_pairs TEXT,
                 ADD COLUMN IF NOT EXISTS satisfaction_llm_res VARCHAR(255),
                 ADD COLUMN IF NOT EXISTS emotion_llm_res VARCHAR(255),

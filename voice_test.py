@@ -1,3 +1,4 @@
+
 import io
 import json
 import re
@@ -162,19 +163,19 @@ def main():
 
 
 
-    # max_workers = 10
-    # file_list = []
-    # for i in range(1, 7):  # 1 to 6
-    #     file_path = f"./voice_data/{i:03d}.mp3"
-    #     if os.path.isfile(file_path):
-    #         file_list.append(file_path)
-    # print(file_list)
+    max_workers = 10
+    file_list = []
+    for i in range(1, 7):  # 1 to 6
+        file_path = f"./voice_data/{i:03d}.mp3"
+        if os.path.isfile(file_path):
+            file_list.append(file_path)
+    print(file_list)
 
-    # with ThreadPoolExecutor(max_workers=max_workers) as executor:
-    #     futures = []
-    #     for i, url in enumerate(url_list):
-    #         futures.append(executor.submit(process_one, url, f"call_{i:03d}"))
-    #         time.sleep(0.1)  # 可选：轻微打散请求，降低上游瞬时压力
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for i, url in enumerate(url_list):
+            futures.append(executor.submit(process_one, url, f"call_{i:03d}"))
+            time.sleep(0.1)  # 可选：轻微打散请求，降低上游瞬时压力
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = []
