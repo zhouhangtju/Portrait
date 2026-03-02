@@ -321,13 +321,13 @@
             </el-select>
             <el-select
               v-model="callVisitNeededFilter"
-              placeholder="需要上门"
+              placeholder="需要处理"
               style="width: 110px"
               clearable
               @change="handleCallFilterChange"
             >
-              <el-option label="需要上门" value="yes" />
-              <el-option label="无需上门" value="no" />
+              <el-option label="需要处理" value="yes" />
+              <el-option label="无需处理" value="no" />
             </el-select>
           </div>
         </div>
@@ -380,12 +380,12 @@
               {{ row.unsatisfied_reason || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="visit_needed" label="是否需要上门" min-width="110" align="center">
+          <el-table-column prop="visit_needed" label="是否需要处理" min-width="110" align="center">
             <template #default="{ row }">
               {{ formatVisitNeeded(row.visit_needed) }}
             </template>
           </el-table-column>
-          <el-table-column prop="visit_reason" label="上门原因" min-width="160" show-overflow-tooltip>
+          <el-table-column prop="visit_reason" label="处理原因" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.visit_reason || '-' }}
             </template>
@@ -459,7 +459,7 @@ const callSatisfactionFilter = ref('')
 const callSentimentFilter = ref('')
 const callRiskFilter = ref('')
 const callUnsatisfiedReasonFilter = ref('')  // 不满意原因筛选（模糊）
-const callVisitNeededFilter = ref('')        // 是否需要上门（yes/no）
+const callVisitNeededFilter = ref('')        // 是否需要处理（yes/no）
 
 // 趋势数据（4个维度）
 const trendLimit = ref(8)  // 趋势图显示周数
@@ -1079,8 +1079,8 @@ function formatDurationShort(seconds: number | undefined): string {
 
 function formatVisitNeeded(value: unknown): string {
   if (value === undefined || value === null || value === '') return '-'
-  if (value === true || value === 'yes' || value === '需要' || value === '需上门') return '需要上门'
-  if (value === false || value === 'no' || value === '不需要' || value === '无需上门') return '无需上门'
+  if (value === true || value === 'yes' || value === '需要' || value === '需上门') return '需要处理'
+  if (value === false || value === 'no' || value === '不需要' || value === '无需上门') return '无需处理'
   return String(value)
 }
 

@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from .config import settings
+from urllib.parse import quote_plus
 
 # ===========================================
 # PostgreSQL 连接池 (画像存储)
@@ -108,15 +109,19 @@ async def init_source_db() -> bool:
     logger.info(f"初始化 MySQL 连接: {settings.mysql_host}:{settings.mysql_port}")
     
     try:
+        password_encoded = quote_plus(settings.mysql_password)
+        dsn = (
+            f"mysql+aiomysql://{settings.mysql_user}:{password_encoded}"
+            f"@{settings.mysql_host}:{settings.mysql_port}/{settings.mysql_db}"
+        )
         _source_engine = create_async_engine(
-            settings.mysql_dsn,
+            dsn,
             echo=settings.debug,
             pool_size=5,
             max_overflow=10,
             pool_pre_ping=True,
             pool_recycle=3600,
         )
-        
         _source_session_factory = async_sessionmaker(
             bind=_source_engine,
             class_=AsyncSession,
