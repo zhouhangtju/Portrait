@@ -6,6 +6,8 @@ FastAPI 应用入口
 
 import sys
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -45,7 +47,7 @@ async def lifespan(app: FastAPI):
         # 关闭调度器
         task_scheduler.shutdown()
 
-    logger.info("服务已停止")
+    print("服务已停止")
 
 
 
