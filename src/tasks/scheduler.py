@@ -67,7 +67,6 @@ class TaskScheduler:
             self._job_sync_today_records,
             trigger=CronTrigger(
                 # hour=settings.sync_cron_hour,
-
                 minute=settings.sync_cron_minute,
             ),
             id="sync_call_records",
