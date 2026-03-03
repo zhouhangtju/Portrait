@@ -4,6 +4,8 @@ Portrait 用户数据画像服务
 FastAPI 应用入口
 """
 ####加入python路径设置，允许直接运行此文件
+
+print("正在启动 Portrait 用户数据画像服务...")
 import sys
 from pathlib import Path
 
