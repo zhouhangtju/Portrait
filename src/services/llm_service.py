@@ -306,7 +306,7 @@ class LLMService:
         #     "Authorization": f"Bearer {settings.llm_api_key}",
         # }
 
-        url = "http://188.103.147.179:30175/gateway/api/bMWPmH"
+        url = "http://188.107.245.55:9002/gateway/api/bMWPmH"
         headers = {
             "Content-Type": "application/json",
             "Authorization-Gateway": "sk-a2b25448-f74f-4c2f-a855-aed8e4251d01"

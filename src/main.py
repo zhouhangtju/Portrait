@@ -47,9 +47,8 @@ async def lifespan(app: FastAPI):
         # 关闭调度器
         task_scheduler.shutdown()
 
-    print("服务已停止")
 
-
+    logger.info("服务已停止")
 
 
 # 创建 FastAPI 应用
