@@ -7,6 +7,9 @@ FastAPI 应用入口
 import sys
 
 from contextlib import asynccontextmanager
+# Allow running this file directly by adding the project root to sys.path.
+#####
+####
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
