@@ -7,9 +7,6 @@ FastAPI 应用入口
 import sys
 
 from contextlib import asynccontextmanager
-# Allow running this file directly by adding the project root to sys.path.
-#####
-####
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,7 +45,8 @@ async def lifespan(app: FastAPI):
         # 关闭调度器
         task_scheduler.shutdown()
 
-    logger.info("服务已停止")
+    # logger.info("服务已停止")
+    print("服务已停止")
 
 
 
