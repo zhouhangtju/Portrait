@@ -3,9 +3,7 @@ Portrait 用户数据画像服务
 
 FastAPI 应用入口
 """
-####加入python路径设置，允许直接运行此文件
 
-print("正在启动 Portrait 用户数据画像服务...")
 import sys
 
 from contextlib import asynccontextmanager
@@ -47,7 +45,8 @@ async def lifespan(app: FastAPI):
         # 关闭调度器
         task_scheduler.shutdown()
 
-    ### logger.info("服务已停止")
+    logger.info("服务已停止")
+
 
 
 # 创建 FastAPI 应用
