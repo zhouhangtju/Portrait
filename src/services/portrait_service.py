@@ -829,30 +829,58 @@ class PortraitService:
             "computed_at": snapshot.computed_at.isoformat() if snapshot.computed_at else None,
         }
 
-    # async def compute_weekly_snapshot(self) -> dict[str, Any]:
-    #     """计算上周快照"""
-    #     from datetime import timedelta
-    #
-    #     today = date.today()
-    #     last_week = today - timedelta(days=7)
-    #     period_key = (
-    #         period_service.get_week_key(last_week)
-    #         if hasattr(period_service, "get_week_key")
-    #         else f"{last_week.isocalendar()[0]}-W{last_week.isocalendar()[1]:02d}"
-    #     )
-    #     return await self.compute_snapshot("week", period_key)
-
     async def compute_weekly_snapshot(self) -> dict[str, Any]:
-        """计算 2025-11-10 至 2025-11-16 的周快照"""
-        from datetime import date
+        """计算上周快照"""
+        from datetime import timedelta
 
-        target_monday = date(2025, 11, 10)  # 这一周的周一
+        today = date.today()
+        last_week = today - timedelta(days=7)
         period_key = (
-            period_service.get_week_key(target_monday)
+            period_service.get_week_key(last_week)
             if hasattr(period_service, "get_week_key")
-            else f"{target_monday.isocalendar()[0]}-W{target_monday.isocalendar()[1]:02d}"
+            else f"{last_week.isocalendar()[0]}-W{last_week.isocalendar()[1]:02d}"
         )
         return await self.compute_snapshot("week", period_key)
+
+    async def compute_weekly_snapshot_for_today(self) -> dict[str, Any]:
+        """
+        计算当前日期所属周的快照
+
+        逻辑：
+        1. 获取今天是周几
+        2. 推算本周一的日期
+        3. 生成该周的 period_key
+        4. 调用 compute_snapshot 计算该周数据
+        """
+        from datetime import timedelta
+
+        today = date.today()
+        # 计算本周一的日期 (weekday(): Monday=0, Sunday=6)
+        current_monday = today - timedelta(days=today.weekday())
+
+        # 生成周key (格式例如: 2023-W40)
+        # 使用本周一的日期来生成唯一的周标识
+        period_key = (
+            period_service.get_week_key(current_monday)
+            if hasattr(period_service, "get_week_key")
+            else f"{current_monday.isocalendar()[0]}-W{current_monday.isocalendar()[1]:02d}"
+        )
+
+        logger.info(f"[周快照] 计算当前周快照: {period_key} (范围: {current_monday} 至 {current_monday + timedelta(days=6)})")
+
+        return await self.compute_snapshot("week", period_key)
+
+    # async def compute_weekly_snapshot(self) -> dict[str, Any]:
+    #     """计算 2025-11-10 至 2025-11-16 的周快照"""
+    #     from datetime import date
+    #
+    #     target_monday = date(2025, 11, 10)  # 这一周的周一
+    #     period_key = (
+    #         period_service.get_week_key(target_monday)
+    #         if hasattr(period_service, "get_week_key")
+    #         else f"{target_monday.isocalendar()[0]}-W{target_monday.isocalendar()[1]:02d}"
+    #     )
+    #     return await self.compute_snapshot("week", period_key)
 
     async def compute_monthly_snapshot(self) -> dict[str, Any]:
         """计算上月快照"""

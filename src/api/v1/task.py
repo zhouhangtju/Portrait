@@ -92,6 +92,7 @@ class CallRecordItem(BaseModel):
     qa_pairs: Optional[str] = Field(default=None, description="通话文本问答对(JSON字符串)")
     willingness: Optional[str] = Field(default=None, description="沟通意愿")
     risk_level: Optional[str] = Field(default=None, description="综合风险")
+    harassment_risk: Optional[str] = Field(default=None, description="防骚扰风险: yes(是)/no(否)")
 
 class CallRecordListResponse(BaseModel):
     """通话明细列表响应"""
@@ -636,6 +637,8 @@ async def get_task_calls(
     unsatisfied_reason: Optional[str] = Query(default=None, description="不满意原因"),
     visit_needed: Optional[str] = Query(default=None, description="是否需要上门"),
     visit_reason: Optional[str] = Query(default=None, description="上门原因"),
+    harassment_risk: Optional[str] = Query(default=None, description="防骚扰风险: yes(是)/no(否)")
+
 
 ):
     """
@@ -669,8 +672,10 @@ async def get_task_calls(
         base_conditions.append(CallRecordEnriched.risk_level == risk_level)
     if satisfaction:
         base_conditions.append(CallRecordEnriched.satisfaction == satisfaction)
-    # if unsatisfied_reason:
-    #     base_conditions.append(CallRecordEnriched.unsatisfied_reason == unsatisfied_reason)
+    if unsatisfied_reason:
+        base_conditions.append(CallRecordEnriched.unsatisfied_reason == unsatisfied_reason)
+    if harassment_risk:
+        base_conditions.append(CallRecordEnriched.harassment_risk == harassment_risk)
     if visit_needed:
         normalized = visit_needed.strip().lower()
         if normalized in ("yes", "y", "true", "1", "需要", "要", "需上门", "是"):
@@ -712,6 +717,7 @@ async def get_task_calls(
             CallRecordEnriched.visit_needed,
             CallRecordEnriched.visit_reason,
             CallRecordEnriched.qa_pairs,
+            CallRecordEnriched.harassment_risk,
         )
         .where(*base_conditions)
         .order_by(CallRecordEnriched.call_date.desc(), CallRecordEnriched.callid.desc())
@@ -743,6 +749,7 @@ async def get_task_calls(
             visit_needed=row.visit_needed,
             visit_reason=row.visit_reason,
             qa_pairs=row.qa_pairs,
+            harassment_risk=row.harassment_risk,
         )
         for row in rows
     ]

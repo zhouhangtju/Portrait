@@ -61,7 +61,9 @@ async def add_new_columns():
                 ADD COLUMN IF NOT EXISTS churn_llm_res VARCHAR(255),
                 ADD COLUMN IF NOT EXISTS unsatisfied_reason VARCHAR(255),
                 ADD COLUMN IF NOT EXISTS visit_needed VARCHAR(255),
-                ADD COLUMN IF NOT EXISTS visit_reason VARCHAR(255)
+                ADD COLUMN IF NOT EXISTS visit_reason VARCHAR(255),
+                ADD COLUMN IF NOT EXISTS harassment_risk VARCHAR(8),
+                ADD COLUMN IF NOT EXISTS harassment_llm_res VARCHAR(255),
             """))
 
             # user_portrait_snapshot 表

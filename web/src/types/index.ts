@@ -119,6 +119,7 @@ export interface CallRecord {
     visit_needed: string | null
     visit_reason: string | null
     qa_pairs: string | null
+    harassment_risk: 'yes' | 'no' | null
 }
 
 export interface CallRecordListResponse {

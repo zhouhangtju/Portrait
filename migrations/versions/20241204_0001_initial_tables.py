@@ -62,7 +62,8 @@ def upgrade() -> None:
         sa.Column("unsatisfied_reason", sa.String(255), nullable=True, comment="不满意原因"),
         sa.Column("visit_needed", sa.String(255), nullable=True, comment="是否需要上门"),
         sa.Column("visit_reason", sa.String(255), nullable=True, comment="上门原因"),
-
+        sa.Column("harassment_risk", sa.String(8), nullable=True, comment="防骚扰风险: yes(是)/no(否)"),
+        sa.Column("harassment_llm_res", sa.String(255), nullable=True, comment="防骚扰模型返回结果(JSON字符串)"),
         # 时间戳
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),

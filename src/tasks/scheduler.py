@@ -72,6 +72,7 @@ class TaskScheduler:
             id="sync_call_records",
             name="同步通话记录",
             replace_existing=True,
+            misfire_grace_time=1800,
         )
         logger.info(f"注册任务: 同步通话记录 @ {settings.sync_cron_hour:02d}:{settings.sync_cron_minute:02d}")
 
@@ -88,34 +89,34 @@ class TaskScheduler:
         # 3. 周期快照检查 (凌晨6点)
         self.scheduler.add_job(
             self._job_check_period_snapshot,
-            trigger=CronTrigger(hour=6, minute=0),
+            trigger=CronTrigger(hour=22, minute=00),
             # trigger=CronTrigger(hour=15, minute=1),
 
             id="check_period_snapshot",
             name="检查并计算周期快照",
             replace_existing=True,
         )
-        logger.info("注册任务: 周期快照检查 @ 06:00")
+        logger.info("注册任务: 周期快照检查 @ 22:00")
 
         # 4. 场景汇总计算 (凌晨6:30，在快照计算之后)
         self.scheduler.add_job(
             self._job_compute_task_summary,
-            trigger=CronTrigger(hour=6, minute=30),
+            trigger=CronTrigger(hour=22, minute=30),
             id="compute_task_summary",
             name="计算场景汇总统计",
             replace_existing=True,
         )
-        logger.info("注册任务: 场景汇总计算 @ 06:30")
+        logger.info("注册任务: 场景汇总计算 @ 22:30")
 
         # 5. 同步任务名称 (凌晨6:35，在场景汇总计算之后)
         self.scheduler.add_job(
             self._job_sync_task_names,
-            trigger=CronTrigger(hour=6, minute=35),
+            trigger=CronTrigger(hour=22, minute=35),
             id="sync_task_names",
             name="同步任务名称",
             replace_existing=True,
         )
-        logger.info("注册任务: 同步任务名称 @ 06:35")
+        logger.info("注册任务: 同步任务名称 @ 22:35")
 
     async def _job_sync_yesterday_records(self) -> None:
         """
@@ -136,7 +137,7 @@ class TaskScheduler:
 
     async def _job_sync_today_records(self) -> None:
         """
-        同步昨日通话记录
+        同步通话记录
 
         T+1 策略：同步前一天的完整数据
         """
@@ -182,8 +183,7 @@ class TaskScheduler:
 
         try:
             # 检查是否需要计算周快照 (周一)
-            if today.weekday() == 0:  # Monday
-                await portrait_service.compute_weekly_snapshot()
+            await portrait_service.compute_weekly_snapshot_for_today()
 
             # 检查是否需要计算月快照 (1号)
             if today.day == 1:
@@ -211,9 +211,7 @@ class TaskScheduler:
 
         try:
             # 计算上周的场景汇总
-            last_week = today - timedelta(days=7)
-            week_key = get_week_key(last_week)
-
+            week_key = get_week_key(today)
             result = await portrait_service.compute_task_summary("week", week_key)
             logger.info(f"[定时任务] 场景汇总完成: {result}")
 

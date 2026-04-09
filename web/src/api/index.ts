@@ -151,6 +151,7 @@ interface CallRecordFilters {
     sentiment?: string
     risk_level?: string
     satisfaction?: string
+    harassment_risk?: string
     visit_needed?: string
 }
 
@@ -175,6 +176,7 @@ export async function fetchCallRecords(
         if (filters.sentiment) params.sentiment = filters.sentiment
         if (filters.risk_level) params.risk_level = filters.risk_level
         if (filters.satisfaction) params.satisfaction = filters.satisfaction
+        if (filters.harassment_risk) params.harassment_risk = filters.harassment_risk
         if (filters.visit_needed) params.visit_needed = filters.visit_needed
     }
 

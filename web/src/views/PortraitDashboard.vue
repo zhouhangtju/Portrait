@@ -83,7 +83,7 @@
         </div>
       </div>
 
-      <!-- 统计卡片区 - 4个维度 -->
+      <!-- 统计卡片区 - 4 个维度 -->
       <div class="stats-grid-4">
         <!-- 满意度分布 -->
         <div class="card mini-chart-card">
@@ -114,15 +114,15 @@
       <div class="stats-grid">
         <div class="card" style="grid-column: span 2;">
           <div class="card-header-with-action">
-            <h3 class="card-title">画像趋势变化（4个维度）</h3>
+            <h3 class="card-title">画像趋势变化（4 个维度）</h3>
             <el-select
               v-model="trendLimit"
               style="width: 100px"
               @change="handleTrendLimitChange"
             >
-              <el-option label="最近4周" :value="4" />
-              <el-option label="最近8周" :value="8" />
-              <el-option label="最近12周" :value="12" />
+              <el-option label="最近 4 周" :value="4" />
+              <el-option label="最近 8 周" :value="8" />
+              <el-option label="最近 12 周" :value="12" />
             </el-select>
           </div>
           <div class="chart-container" ref="lineChartRef"></div>
@@ -188,7 +188,7 @@
             </el-select>
           </div>
         </div>
-        
+
         <el-table
           :data="customerList"
           style="width: 100%"
@@ -198,7 +198,7 @@
           :flexible="true"
           empty-text="暂无客户数据"
         >
-          <el-table-column prop="customer_id" label="客户ID" min-width="150" show-overflow-tooltip />
+          <el-table-column prop="customer_id" label="客户 ID" min-width="150" show-overflow-tooltip />
           <el-table-column label="手机号" min-width="130" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.phone || '-' }}
@@ -319,6 +319,17 @@
               <el-option label="一般" value="medium" />
               <el-option label="无风险" value="none" />
             </el-select>
+            <!-- 【新增】防骚扰筛选 -->
+            <el-select
+              v-model="callHarassmentFilter"
+              placeholder="是否防骚扰"
+              style="width: 110px"
+              clearable
+              @change="handleCallFilterChange"
+            >
+              <el-option label="是" value="yes" />
+              <el-option label="否" value="no" />
+            </el-select>
             <el-select
               v-model="callVisitNeededFilter"
               placeholder="需要处理"
@@ -345,7 +356,7 @@
           <el-table-column prop="phone" label="手机号" min-width="120" align="center" />
           <el-table-column prop="duration_ms" label="通话时长" min-width="110" align="center">
             <template #default="{ row }">
-              {{ formatDurationMs(row.duration_ms) }}
+              {{ formatDurationMs(row.bill_ms) }}
             </template>
           </el-table-column>
           <el-table-column prop="rounds" label="轮次" min-width="70" align="center" />
@@ -366,6 +377,19 @@
               <span :class="`risk-badge risk-${row.risk_level}`">
                 {{ getRiskLevelLabel(row.risk_level) }}
               </span>
+            </template>
+          </el-table-column>
+          <!-- 【新增】是否防骚扰列 -->
+          <el-table-column prop="harassment_risk" label="是否防骚扰" min-width="100" align="center">
+            <template #default="{ row }">
+              <el-tag
+                :type="row.harassment_risk === 'yes' ? 'danger' : 'info'"
+                size="small"
+                v-if="row.harassment_risk"
+              >
+                {{ formatHarassmentRisk(row.harassment_risk) }}
+              </el-tag>
+              <span v-else>-</span>
             </template>
           </el-table-column>
           <el-table-column prop="willingness" label="沟通意愿" min-width="90" align="center">
@@ -390,11 +414,6 @@
               {{ row.visit_reason || '-' }}
             </template>
           </el-table-column>
-          <!-- <el-table-column prop="qa_pairs" label="通话文本" min-width="240" show-overflow-tooltip>
-            <template #default="{ row }">
-              {{ formatQaPairs(row.qa_pairs) }}
-            </template>
-          </el-table-column> -->
         </el-table>
 
         <div class="table-pagination">
@@ -458,15 +477,15 @@ const callSearchKeyword = ref('')
 const callSatisfactionFilter = ref('')
 const callSentimentFilter = ref('')
 const callRiskFilter = ref('')
-const callUnsatisfiedReasonFilter = ref('')  // 不满意原因筛选（模糊）
+const callHarassmentFilter = ref('') // 【新增】防骚扰筛选
 const callVisitNeededFilter = ref('')        // 是否需要处理（yes/no）
 
 
-// 趋势数据（4个维度）
+// 趋势数据（4 个维度）
 const trendLimit = ref(8)  // 趋势图显示周数
 const trendData = ref<{
   satisfaction: TrendPoint[]  // 满意度趋势（满意比例）
-  risk: TrendPoint[]          // 风险趋势（流失+投诉比例）
+  risk: TrendPoint[]          // 风险趋势（流失 + 投诉比例）
   emotion: TrendPoint[]       // 情感趋势（正向比例）
   willingness: TrendPoint[]   // 沟通意愿趋势（深度比例）
 }>({
@@ -501,44 +520,44 @@ const availablePeriods = computed(() => {
 // 过滤客户列表（支持关键词搜索和多维度筛选）
 const filteredCustomerList = computed(() => {
   let result = customerList.value
-  
+
   // 按手机号搜索
   if (tableSearchKeyword.value) {
     const keyword = tableSearchKeyword.value.toLowerCase()
-    result = result.filter(c => 
+    result = result.filter(c =>
       c.phone && c.phone.includes(keyword)
     )
   }
-  
+
   // 满意度筛选
   if (satisfactionFilter.value) {
     result = result.filter(c => c.satisfaction === satisfactionFilter.value)
   }
-  
+
   // 情感筛选
   if (emotionFilter.value) {
     result = result.filter(c => c.emotion === emotionFilter.value)
   }
-  
+
   // 风险筛选
   if (riskFilter.value) {
     result = result.filter(c => c.risk_level === riskFilter.value)
   }
-  
+
   // 沟通意愿筛选
   if (willingnessFilter.value) {
     result = result.filter(c => c.willingness === willingnessFilter.value)
   }
-  
+
   return result
 })
 
 // 是否有激活的筛选条件
 const hasActiveFilter = computed(() => {
-  return !!tableSearchKeyword.value || 
-         !!satisfactionFilter.value || 
-         !!emotionFilter.value || 
-         !!riskFilter.value || 
+  return !!tableSearchKeyword.value ||
+         !!satisfactionFilter.value ||
+         !!emotionFilter.value ||
+         !!riskFilter.value ||
          !!willingnessFilter.value
 })
 
@@ -557,32 +576,32 @@ function getWeekDateRange(periodKey: string): { start: string; end: string } {
   // 解析 2025-W48 格式
   const match = periodKey.match(/^(\d{4})-W(\d{2})$/)
   if (!match) return { start: '', end: '' }
-  
+
   const year = parseInt(match[1])
   const week = parseInt(match[2])
-  
+
   // 计算该年第一周的周一
   const jan1 = new Date(year, 0, 1)
-  const dayOfWeek = jan1.getDay() || 7  // 周日为7
-  
-  // ISO周：第一周是包含当年第一个周四的周
+  const dayOfWeek = jan1.getDay() || 7  // 周日为 7
+
+  // ISO 周：第一周是包含当年第一个周四的周
   let firstMonday: Date
   if (dayOfWeek <= 4) {
     firstMonday = new Date(year, 0, 1 - dayOfWeek + 1)  // 当周的周一
   } else {
     firstMonday = new Date(year, 0, 1 + (8 - dayOfWeek))  // 下周的周一
   }
-  
+
   // 计算目标周的周一
   const targetMonday = new Date(firstMonday)
   targetMonday.setDate(firstMonday.getDate() + (week - 1) * 7)
-  
+
   // 计算周日
   const targetSunday = new Date(targetMonday)
   targetSunday.setDate(targetMonday.getDate() + 6)
-  
+
   const formatDate = (d: Date) => `${d.getMonth() + 1}月${d.getDate()}日`
-  
+
   return {
     start: formatDate(targetMonday),
     end: formatDate(targetSunday)
@@ -616,7 +635,7 @@ function getTaskLabel(task: Task): string {
   return `场景 ${task.task_id.slice(0, 8)}...`
 }
 
-// 根据任务ID获取任务名称
+// 根据任务 ID 获取任务名称
 function getTaskNameById(taskId: string): string {
   const task = tasks.value.find(t => t.task_id === taskId)
   if (task?.task_name) {
@@ -658,7 +677,7 @@ function updateAllCharts() {
 function createMiniPieOption(data: {value: number, name: string, color: string}[], centerText: string) {
   const hasData = data.some(d => d.value > 0)
   return {
-    tooltip: { 
+    tooltip: {
       trigger: 'item',
       formatter: '{b}: {c} ({d}%)'
     },
@@ -733,7 +752,7 @@ function updateWillingnessChart() {
   ], '沟通意愿'))
 }
 
-// 更新折线图（4个维度）
+// 更新折线图（4 个维度）
 function updateLineChart() {
   if (!lineChart) return
 
@@ -744,7 +763,7 @@ function updateLineChart() {
 
   // 获取所有周期标签（使用简短格式显示日期范围）
   // 后端返回的数据已按时间顺序排列（旧→新），无需反转
-  const periods = satisfactionData.length > 0 
+  const periods = satisfactionData.length > 0
     ? satisfactionData.map(p => getPeriodShortLabel(p.period))
     : availablePeriods.value.slice(0, trendLimit.value).map(p => getPeriodShortLabel(p))
 
@@ -755,7 +774,7 @@ function updateLineChart() {
   const willingnessValues = willingnessData.map(p => (p.value * 100).toFixed(1))
 
   lineChart.setOption({
-    tooltip: { 
+    tooltip: {
       trigger: 'axis',
       formatter: (params: any) => {
         let result = `${params[0].axisValue}<br/>`
@@ -834,7 +853,7 @@ async function loadAvailablePeriods() {
   try {
     const data = await fetchAvailablePeriods(periodType.value)
     availablePeriodsFromDB.value = data
-    
+
     // 如果数据库有数据，且当前选中的周期不在列表中，则选择第一个
     if (data.length > 0) {
       const currentPeriodExists = data.some(p => p.period_key === selectedPeriod.value)
@@ -865,7 +884,7 @@ async function loadTasks() {
     // 传入周期参数，获取该周期内有数据的场景
     const data = await fetchTasks(50, periodType.value, selectedPeriod.value)
     tasks.value = data
-    
+
     // 如果当前选中的场景不在列表中，或者没有选中场景，则默认选择第一个
     const currentTaskExists = tasks.value.some(t => t.task_id === selectedTaskId.value)
     if (!currentTaskExists && tasks.value.length > 0) {
@@ -897,7 +916,7 @@ async function loadSummary() {
   }
 }
 
-// 加载趋势数据（4个维度，固定按周显示）
+// 加载趋势数据（4 个维度，固定按周显示）
 async function loadTrends() {
   if (!selectedTaskId.value) return
 
@@ -914,7 +933,7 @@ async function loadTrends() {
       fetchTaskTrend(selectedTaskId.value, 'week', 'positive_rate', limit),   // 正向情感率
       fetchTaskTrend(selectedTaskId.value, 'week', 'deep_willingness_rate', limit),  // 深度沟通率
     ])
-    
+
     trendData.value = {
       satisfaction: satisfactionTrend.series || [],
       risk: riskTrend.series || [],
@@ -933,7 +952,7 @@ async function loadTrends() {
 async function loadData() {
   if (!selectedTaskId.value || !selectedPeriod.value) return
   loading.value = true
-  
+
   try {
     await Promise.all([loadSummary(), loadTrends(), loadCustomers(), loadCallRecords()])
   } finally {
@@ -956,7 +975,7 @@ async function loadCustomers() {
       risk_level: riskFilter.value || undefined,
       willingness: willingnessFilter.value || undefined,
     }
-    
+
     const result = await fetchCustomers(taskId, periodType.value, selectedPeriod.value, currentPage.value, pageSize, filters)
     customerList.value = result.list
     customerTotal.value = result.total
@@ -978,6 +997,7 @@ async function loadCallRecords() {
       sentiment: callSentimentFilter.value || undefined,
       risk_level: callRiskFilter.value || undefined,
       satisfaction: callSatisfactionFilter.value || undefined,
+      harassment_risk: callHarassmentFilter.value || undefined, // 【新增】传递防骚扰筛选
       visit_needed: callVisitNeededFilter.value || undefined,
     }
 
@@ -1082,6 +1102,14 @@ function formatVisitNeeded(value: unknown): string {
   if (value === undefined || value === null || value === '') return '-'
   if (value === true || value === 'yes' || value === '需要' || value === '需上门') return '需要处理'
   if (value === false || value === 'no' || value === '不需要' || value === '无需上门') return '无需处理'
+  return String(value)
+}
+
+// 【新增】格式化防骚扰风险
+function formatHarassmentRisk(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '-'
+  if (value === 'yes') return '是'
+  if (value === 'no') return '否'
   return String(value)
 }
 
@@ -1215,20 +1243,20 @@ onMounted(async () => {
   try {
     // 1. 先从数据库加载可用周期（会自动选择第一个有数据的周期）
     await loadAvailablePeriods()
-    
+
     // 2. 加载该周期内的场景列表（会自动选择第一个场景）
     await loadTasks()
-    
+
     // 3. 初始化图表
     await nextTick()
     initCharts()
-    
+
     // 4. 加载数据
     await loadData()
   } finally {
     loading.value = false
   }
-  
+
   window.addEventListener('resize', handleResize)
 })
 
@@ -1316,7 +1344,7 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 
-/* 4个维度统计卡片布局 */
+/* 4 个维度统计卡片布局 */
 .stats-grid-4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1443,7 +1471,7 @@ onUnmounted(() => {
   .overview-cards {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .stats-grid {
     grid-template-columns: 1fr;
   }
@@ -1453,7 +1481,7 @@ onUnmounted(() => {
   .overview-cards {
     grid-template-columns: 1fr;
   }
-  
+
   .filter-bar {
     flex-wrap: wrap;
   }

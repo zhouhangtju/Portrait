@@ -188,7 +188,8 @@ class CallRecordEnriched(PortraitBase, UUIDPrimaryKeyMixin, TimestampMixin):
     unsatisfied_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="不满意原因")
     visit_needed: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="是否需要上门")
     visit_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="上门原因")
-
+    harassment_risk: Mapped[Optional[str]] = mapped_column(String(8),nullable=True, comment="防骚扰风险: yes(是)/no(否)")
+    harassment_llm_res: Mapped[Optional[str]] = mapped_column(String(255),nullable=True,comment="防骚扰模型返回结果(JSON字符串)")
 
     # ===========================================
     # 索引定义

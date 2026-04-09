@@ -128,7 +128,8 @@ UNSATISFIED_REASON_PROMPT = '''
 - reason 必须严格等于候选原因中的某一个字符串
 - 如果对话片段无法判断或用户未表达不满意原因，请输出 {{"reason": "接通未评价"}}
 
-现在请输出 JSON：
+请输出示例：
+{{"reason":"上网质量问题"}}
 '''
 
 VISIT_PROMPT = '''
@@ -176,6 +177,33 @@ VISIT_REASON_PROMPT = '''
 
 请输出示例：
 {{"visit_reason":"家庭宽带问题"}}
+'''
+
+HARASSMENT_PROMPT = '''你是质检判定模型。请根据“通话文本”判断用户是否存在反感回访或认为受到骚扰的意向。
+
+判定标准（务必遵守）：
+1. yes：仅在用户明确表达以下意向时成立：
+   - 明确拒绝继续通话或回访（如：“别打电话了”、“以后别再打”、“不要再联系我”）。
+   - 表达对重复询问的强烈厌烦（如：“问了好几遍了”、“还问”、“烦不烦”、“烦死了”、“啰嗦”、“没完没了”）。
+   - 直接指责对方骚扰（如：“别骚扰我”、“这是骚扰”、“恶意骚扰”）。
+   - 因被打扰而威胁升级（如：“再问我就投诉”、“再打就举报”、“我要拉黑你”）。
+   - 情绪激烈地表示已多次被回访，无法忍受。
+2. no：在以下情况成立：
+   - 用户正常配合回访，态度平和或礼貌。
+   - 用户仅表达一般性不满或疑问，但未提及“重复”、“骚扰”或要求“停止联系”。
+   - 用户虽表示忙碌或不方便，但未明确禁止后续联系。
+   - 通话内容仅为正常的流程性沟通或信息确认。
+3. 若用户未明确表达反感或骚扰意向，或信息不足以判断，默认输出“no”，不要过度猜测。
+4. 注意区分“客服按流程确认信息”与“用户反感的重复询问”。只有当用户主观表现出厌烦情绪或明确制止时，才标记为 yes。
+
+输出必须是严格 JSON（不要多余文字）：
+{{
+  "label": "yes|no",
+  "confidence": 0.0-1.0
+}}
+
+通话文本如下：
+{dialogue_text}
 '''
 
 
@@ -251,6 +279,8 @@ class LLMService:
             prompt = VISIT_PROMPT.format(dialogue_text=dialogue)
         elif portrait_label == 'visit_reason':
             prompt = VISIT_REASON_PROMPT.format(dialogue_text=dialogue)
+        elif portrait_label == 'harassment':
+            prompt = HARASSMENT_PROMPT.format(dialogue_text=dialogue)
 
         try:
             response = await self._call_llm(prompt)

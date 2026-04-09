@@ -309,6 +309,8 @@ class ETLService:
                     "unsatisfied_reason": result.unsatisfied_reason,
                     "visit_needed": result.visit_needed,
                     "visit_reason": result.visit_reason,
+                    "harassment_risk": result.harassment_risk,
+                    "harassment_llm_res": result.harassment_llm_res
                 }
             )
             analyzed_count += 1
@@ -507,8 +509,7 @@ class ETLService:
     async def _get_agent_api_config(self) -> tuple[str, str]:
         """获取 Agent API 配置。"""
         base_url = 'http://188.107.245.58:19999'
-        token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiZDE5NGUyMDhkNmZjZjFiYTIxYjYwZGQ2NWQ2ZTU2ODlkYzFkOTAxMzk5ZTg3ZWJiZGVlYWFmNGFhNDA0YzVlMTllZDQwODc5ZmIwNzc2NWQiLCJpYXQiOjE3NTgzNjAyMzMsIm5iZiI6MTc1ODM2MDIzMywiZXhwIjoxNzg5ODk2MjMzLCJzdWIiOiI5YWEyYzcyMi0xMmJhLTRkOWMtODA1Ni03NTc0NjFjZGVkNWUiLCJzY29wZXMiOltdfQ.tQAr3M1WgUv-YbgFZuNSiMQI5j5Mlw5vw3s7Pcwh_XRo-n1UE08AaHEIHCjHxKAcy1oYGzPrEkp8W0dP9oh_acxtoAw-7_6NXintBSrCF8tESpDvBF2Sr1yxHIVmOdXQkAbGvbnGnTwKedNq0jUqqumTjABj1odi1WoX1_KAQ8hs7RSpYvXogk9D46tRlgrGRQS7JdbrmhHy-FvYrhG4kDM2BlHlQ-zH5suOGE6X_yewi0ENvvq1AQkSclApB4QsyeUpAn-l2LsM4QaSRg_wYDsnzeJkEKfKQMDEQIOudYP1jPjzwVgQBRMi_SBKRojv8KruuXl-JXcvVse_HXiM9yw_Kl-9vEnWL-o-eugyFV35CoSU7svvc2YFSL1JCCSD3GvitutchrorxqsYrPSF6Wgud8pGFyxICI61LmiWjLEs0xriXcvUA1Cr7o_pzj--fZFq4LvBM7XUNL6O6wW585rdLhryjunpjboQWzIn7-NzZ8vk-TObx1Pm4c75ENm0wAh7pHDz8lAx4rFU3iPBnW5dDH4N36YbQT2zXooiAmNxzJ6IXFvCWxX6D_ViRF6iHrFyl7jNNwYQcpyX_HjlAzNwJEGCTuQs9JEYBUgb0M4wsR-oIAvUCM6fndEOk2H3xITu1sfAMKGWBnKtHqNPoEwklwHTDoqY24DFkYZhhuA'
-
+        token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxMyIsImp0aSI6IjQ0ZDM1YzI3YWMxNWI0MGRlNGRlZGU0Zjc5NzhlZWUxYzM3MTZiMjZmZDZmOTljMGUzMmRiNWU5MmI3OGY5NTJlNDVlNTNhMWFmMTA2YzUzIiwiaWF0IjoxNzc0MDg5NzA4LCJuYmYiOjE3NzQwODk3MDgsImV4cCI6MTgwNTYyNTcwOCwic3ViIjoiOWFhMmM3MjItMTJiYS00ZDljLTgwNTYtNzU3NDYxY2RlZDVlIiwic2NvcGVzIjpbXX0.ACIJTMdmp3N9qBFriQIwbB_GI5K9MJmEPbsL9-qsg6UiyhqZfPPRJ8ZwHIjURANOEQPrxIHXuAWAu6SP-6PSn0BOwQDd275FpXxV-Wgwow98Z_uKcXZKGyPoiRnqcJdenKctGgcA2xdRqoRWv2n1UW82HdR6wWkwAKggZRzXOj_kULz80mStaWOiVZdrunh5ff8qFEStmc59bRLIl-4y744x1XhIEsnHmiJ1zHuCBEpRKRo0NkRQnJFCHfvLdhWCnlZk9MJCa7x8_0nNKMBk0fPoQshJ9Qcb7vi5k_JSmtNO8dQAlGlQgCzcADRbw0VAQ3qAPqzpIPPHzBVYCqCJ6PRlR4DghVWAfbMcJomih0gnxqOg6jkj4AoRPhW94RBDYQm-elnZWEKWW4j2TNJm9cifWaoq-UKpAAyT54n-rVmw1XJzqW73BGy1UNadBhSA_w6T3xl5xdtjtOLJ7ybEgoH5KEhSuhNS7dcB2x53E3ftstEvP7c2FelEiLoCidNLiRXidyAswNa0JiT20YLC_LJ3qMMJud3hHEUgIG3pxVClPazOcIAja2Vriwgy4gt9Ygbpg-c2huqgKQpeNM1TQ_jw0QClprsanuAFmYIGj1muhVOIA1HnSbffvZg63TmXib-nYTyrRl-HkOYLkuN5O7mk6wMiyg7t8mDwnWjWuFk'
         if not base_url or not token:
             raise RuntimeError(
                 "缺少 Agent API 配置：请在 .env 中设置 AGENT_API_BASE_URL 和 AGENT_API_TOKEN"
@@ -582,7 +583,7 @@ class ETLService:
                     user_id,
                     task_id,
                     callid
-                FROM autodialer_call_record_2025_11
+                FROM autodialer_call_record_2026_03
                 WHERE callid IN ({placeholders})
                 """
             )
@@ -663,7 +664,7 @@ class ETLService:
                     values_parts.append(
                         f"(:callid_{idx}, :qa_pairs_{idx}, :satisfaction_{idx}, :satisfaction_source_{idx},:satisfaction_llm_res_{idx}, "
                         f":emotion_{idx}, :emotion_llm_res_{idx}, :emotion_asr_res_{idx}, :complaint_risk_{idx}, :complaint_llm_res_{idx}, :churn_risk_{idx}, :churn_llm_res_{idx},"
-                        f":willingness_{idx}, :risk_level_{idx}, :unsatisfied_reason_{idx}, :visit_needed_{idx}, :visit_reason_{idx})"
+                        f":willingness_{idx}, :risk_level_{idx}, :unsatisfied_reason_{idx}, :visit_needed_{idx}, :visit_reason_{idx}, :harassment_risk_{idx}, :harassment_llm_res_{idx})"
                     )
                     params[f"callid_{idx}"] = update["callid"]
                     params[f"qa_pairs_{idx}"] = update["qa_pairs"]
@@ -682,6 +683,8 @@ class ETLService:
                     params[f"unsatisfied_reason_{idx}"] = update["unsatisfied_reason"]
                     params[f"visit_needed_{idx}"] = update["visit_needed"]
                     params[f"visit_reason_{idx}"] = update["visit_reason"]
+                    params[f"harassment_risk_{idx}"] = update["harassment_risk"]
+                    params[f"harassment_llm_res_{idx}"] = update["harassment_llm_res"]
 
                 # 使用 PostgreSQL VALUES + UPDATE FROM 语法批量更新
                 values_sql = ", ".join(values_parts)
@@ -705,11 +708,13 @@ class ETLService:
                             unsatisfied_reason = v.unsatisfied_reason,
                             visit_needed = v.visit_needed,
                             visit_reason = v.visit_reason,
+                            harassment_risk = v.harassment_risk,
+                            harassment_llm_res = v.harassment_llm_res,
                             llm_analyzed_at = :analyzed_at
                         FROM (VALUES {values_sql}) AS v(
                             callid, qa_pairs, satisfaction, satisfaction_source, satisfaction_llm_res,
                             emotion, emotion_llm_res,emotion_asr_res, complaint_risk,complaint_llm_res, churn_risk,churn_llm_res, 
-                            willingness, risk_level, unsatisfied_reason,visit_needed, visit_reason
+                            willingness, risk_level, unsatisfied_reason,visit_needed,visit_reason,harassment_risk,harassment_llm_res
                         )
                         WHERE c.callid = v.callid
                     """),

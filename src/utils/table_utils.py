@@ -19,8 +19,8 @@ from dateutil.relativedelta import relativedelta
 
 # 固定表后缀（如果设置，则忽略日期计算，直接使用此后缀）
 # 例如: SOURCE_TABLE_SUFFIX=2025_11 表示所有数据都在 autodialer_call_record_2025_11 表中
-FIXED_TABLE_SUFFIX = os.getenv("SOURCE_TABLE_SUFFIX", "").strip()
-
+#FIXED_TABLE_SUFFIX = os.getenv("SOURCE_TABLE_SUFFIX", "").strip()
+FIXED_TABLE_SUFFIX = "2026_03"
 
 def get_call_record_table(task_create_datetime: datetime | date) -> str:
     """
@@ -101,7 +101,8 @@ def get_tables_for_period(
     current = start_date.replace(day=1)
 
     while current <= end_date:
-        suffix = current.strftime("%Y_%m")
+        #suffix = current.strftime("%Y_%m")
+        suffix = "2026_03"
         if table_type == "call_record":
             tables.append(f"autodialer_call_record_{suffix}")
         elif table_type == "call_record_detail":

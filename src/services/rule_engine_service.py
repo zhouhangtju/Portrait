@@ -137,6 +137,19 @@ EMOTION_KEYWORDS = {
     ],
 }
 
+# 防骚扰关键词 (用户反感回访/骚扰意向)
+HARASSMENT_KEYWORDS = {
+    'high': [
+        # 明确拒绝/反感
+        '别打电话', '别再打', '不要打', '以后别打', '别再联系', '不要再问',
+        '烦不烦', '烦死了', '烦不烦啊', '太烦了', '真烦', '啰嗦',
+        '问了好几遍', '问了好几次', '还问', '重复问', '问了又问',
+        '骚扰', '别骚扰', '骚扰我', '恶意骚扰',
+        '投诉', '再问投诉', '再打投诉', '举报', '拉黑', '屏蔽',
+        '没完没了', '有完没完', '够了', '适可而止',
+    ],
+}
+
 # 装机单竣工回访
 INSTALL_FINISH_TASKS = {
         "593ef3d3-2fd2-4241-a171-3b3984f35f67",
@@ -146,6 +159,13 @@ INSTALL_FINISH_TASKS = {
         "178fe85f-282e-4945-b9ec-64d2abf361ab",
         "08374546-f421-4d88-a3f7-2bf74811a005",
         "68f6c619-d084-48f9-ad8d-b67fef1b6f2a",
+        "e7c484aa-db16-486d-ac8c-534658e65139",
+        "a1cecf8b-1e15-4f3e-9201-c2398128a2ee",
+        "a8e7c2b2-23ac-4986-8346-67735605dd5c",
+        "62086274-9e11-40d5-9cf0-a40d944f5d60",
+        "9ea09f9f-3b64-4037-a3fa-e83af34ecf12",
+        "83eecedd-90c5-4a2a-b4cf-ea2d68e4842f",
+        "1dcce3a0-48a0-4174-bb99-c464e8f796d3",
     }
 # 投诉单报结回访
 COMPLAINT_CLOSE_TASKS = {
@@ -156,6 +176,13 @@ COMPLAINT_CLOSE_TASKS = {
         "746e42f0-15c8-4ce0-b529-a0174d087160",
         "5b81315f-9cac-42b6-8118-f8210655541e",
         "bf73a3fb-f412-40fc-b819-d05b6fb6e813",
+        "3a418073-f156-49e3-afe1-d77a248f0388",
+        "6114b08a-c48e-4f53-a9bd-7ad1e69ef871",
+        "6277e6dc-49c8-4264-8b1f-585941ba7e46",
+        "ba885176-28ce-47b9-8e00-8315e6affcd6",
+        "c0b53cc2-fdc1-4b64-bb54-4aaaf653f649",
+        "ba508c01-c348-47eb-87f4-8e5e1fe98265",
+        "12ab2adb-cb8c-4fe9-b10f-bbce2ae4dff6",
     }
 # 质差修复已上门
 QOE_VISIT_TASKS = {
@@ -166,6 +193,13 @@ QOE_VISIT_TASKS = {
         "65b22203-70d3-4719-8d8d-f4b876c8b6ed",
         "7f021fd0-8691-4344-8523-47e2a1c55d39",
         "29c274df-0702-4aca-9089-174b3fce5f67",
+        "8be742e5-201d-469a-8e60-362db44cdced",
+        "e6799d55-9224-4040-91a1-97edbf8ce022",
+        "142c223a-6e91-4328-8aad-35ac01369c55",
+        "8cc4a510-58fa-45a6-939d-576d6e5efc3f",
+        "812aaa9e-ac7d-45d3-8b85-e386a9c48f16",
+        "1634ee8d-a387-47f8-8ba6-4cb62e59e701",
+        "221dc6df-6c23-44a4-ab6b-cb2d9e2eae01",
     }
 # 质差派单问卷
 QOE_SURVEY_TASKS = {
@@ -176,6 +210,13 @@ QOE_SURVEY_TASKS = {
         "2e0abd56-218a-492e-9b68-3205bbfee9e5",
         "033f39f8-c4d6-4518-a342-f1fc174196d4",
         "3bc99a51-78d1-4b9B-bc7c-b72e70361991",
+	"79b3c253-7408-4dbc-9b70-8fd7888bc216",
+        "9317f3b8-fd9f-4f26-a0f7-a449ab01a23a",
+        "aaed1735-e562-4cdc-b9c0-494e53e91525",
+        "cd943a3d-a375-402c-b82f-3e13370a72ba",
+        "88b5fa9e-ecbd-491f-baad-25731a75e894",
+        "c0a86462-1e30-407f-a662-25e79f764b04",
+        "928ea078-337e-4d43-a535-7516ff5bd5bc",
     }
 
 
@@ -198,6 +239,9 @@ class AnalysisResult:
     unsatisfied_reason: Optional[str] = None
     visit_needed: str = None
     visit_reason: str = None
+    harassment_risk: str = 'no'  # yes/no (是否防骚扰)
+    harassment_llm_res: Optional[str] = None
+
 
 
 async def get_risk_level(complaint_risk: str, churn_risk: str) -> str:
@@ -296,6 +340,11 @@ class RuleEngineService:
         visit_needed, visit_reason = await self.get_visit_and_reasoin(qa_pairs)
         result.visit_needed = visit_needed
         result.visit_reason = visit_reason
+
+        # 8. 是否防骚扰分析
+        harassment_risk, harassment_llm_res = await self._analyze_harassment_risk(qa_pairs)
+        result.harassment_risk = harassment_risk
+        result.harassment_llm_res = harassment_llm_res
         
         return result
 
@@ -565,22 +614,21 @@ class RuleEngineService:
         # 2. 检查用户不满意原因
         reason_label, reason_conf = None, 0.0
         if task_id in INSTALL_FINISH_TASKS:
-            if ("Q4:客户评价标准与移动不一致" in asr_labels) or ("Q4-default:客户评价标准与移动不一致" in asr_labels):
+            if ("Q5:客户评价标准与移动不一致" in asr_labels) or ("Q5-default:客户评价标准与移动不一致" in asr_labels):
                 reason_label, reason_conf = "low", 0.80
-            elif (("Q4:上网质量问题" in asr_labels) or ("Q4:非家庭网络类问题" in asr_labels) or ("Q4:服务不及时" in asr_labels) or ("Q4:装维服务不规范" in asr_labels)or ("Q4-default:上网质量问题" in asr_labels) or ("Q4-default:非家庭网络类问题" in asr_labels) or ("Q4-default:服务不及时" in asr_labels) or ("Q4-default:装维服务不规范" in asr_labels)):
+            elif (("Q5:上网质量问题" in asr_labels) or ("Q5:非家庭网络类问题" in asr_labels) or ("Q5:装维服务不及时" in asr_labels) or ("Q5:装维服务不规范" in asr_labels)or ("Q5-default:上网质量问题" in asr_labels) or ("Q5-default:非家庭网络类问题" in asr_labels) or ("Q5-default:装维服务不及时" in asr_labels) or ("Q5-default:装维服务不规范" in asr_labels)):
                 reason_label, reason_conf = "high", 0.80
 
         elif task_id in COMPLAINT_CLOSE_TASKS:
             if ("Q8:客户评价标准与移动不一致" in asr_labels) or ("Q8-default:客户评价标准与移动不一致" in asr_labels):
                 reason_label, reason_conf = "low", 0.80
-            elif (("Q8:上网质量问题" in asr_labels) or ("Q8:非家庭网络类问题" in asr_labels) or ("Q8:服务不及时" in asr_labels) or ("Q8:装维服务不规范" in asr_labels)or ("Q8-default:上网质量问题" in asr_labels) or ("Q8-default:非家庭网络类问题" in asr_labels) or ("Q8-default:服务不及时" in asr_labels) or ("Q8-default:装维服务不规范" in asr_labels)):
+            elif (("Q8:上网质量问题" in asr_labels) or ("Q8:非家庭网络类问题" in asr_labels) or ("Q8:装维服务不及时" in asr_labels) or ("Q8:装维服务不规范" in asr_labels)or ("Q8-default:上网质量问题" in asr_labels) or ("Q8-default:非家庭网络类问题" in asr_labels) or ("Q8-default:装维服务不及时" in asr_labels) or ("Q8-default:装维服务不规范" in asr_labels)):
                 reason_label, reason_conf = "high", 0.80
 
         elif task_id in QOE_VISIT_TASKS:
             if ("Q6:客户评价标准与移动不一致" in asr_labels) or ("Q6-default:客户评价标准与移动不一致" in asr_labels):
                 reason_label, reason_conf = "low", 0.80
-            elif (("Q6:上网质量问题" in asr_labels) or ("Q6:非家庭网络类问题" in asr_labels) or ("Q6:服务不及时" in asr_labels) or ("Q6:装维服务不规范" in asr_labels)or ("Q6-default:上网质量问题" in asr_labels) or ("Q6-default:非家庭网络类问题" in asr_labels) or ("Q6-default:服务不及时" in asr_labels) or ("Q6-default:装维服务不规范" in asr_labels)
-            ):
+            elif (("Q6:上网质量问题" in asr_labels) or ("Q6:非家庭网络类问题" in asr_labels) or ("Q6:装维服务不及时" in asr_labels) or ("Q6:装维服务不规范" in asr_labels) or ("Q6:质差未处理报结" in asr_labels) or ("Q6-default:上网质量问题" in asr_labels) or ("Q6-default:非家庭网络类问题" in asr_labels) or ("Q6-default:装维服务不及时" in asr_labels) or ("Q6-default:装维服务不规范" in asr_labels) or ("Q6-default:质差未处理报结" in asr_labels)):
                 reason_label, reason_conf = "high", 0.80
         else:
             reason_label, reason_conf = "medium", 0.30
@@ -772,8 +820,8 @@ class RuleEngineService:
 
         # 不同任务对应的 question key & 候选集合
         if task_id in INSTALL_FINISH_TASKS:
-            keys = ["Q4", "Q4-default"]
-            candidates = ['服务不及时', '接通未评价', '客户评价标准与移动不一致', '非家庭网络类问题', '装维服务不规范', '上网质量问题']
+            keys = ["Q5", "Q5-default"]
+            candidates = ['装维服务不及时', '接通未评价', '客户评价标准与移动不一致', '非家庭网络类问题', '装维服务不规范', '上网质量问题']
         elif task_id in COMPLAINT_CLOSE_TASKS:
             keys = ["Q8", "Q8-default"]
             candidates = ['装维服务不及时', '接通未评价', '客户评价标准与移动不一致', '非家庭网络类问题', '装维服务不规范', '上网质量问题']
@@ -792,8 +840,11 @@ class RuleEngineService:
         seg_text = json.dumps(segs, ensure_ascii=False, indent=2)
 
         result = await self.llm_service.portrait_analysis_llm(seg_text, candidates, portrait_label="unsatisfied_reason")
- 
         reason = result.get("reason")
+
+        if reason == "接通未评价":
+            return None
+
         if reason in candidates:
             return reason
         # 兜底：如果模型没按约束输出
@@ -847,6 +898,75 @@ class RuleEngineService:
                     res_reason.get("visit_reason") or res_reason.get("reason") or res_reason.get("label") or "").strip()
 
         return "yes", visit_reason
+
+    async def _analyze_harassment_risk(self, qa_pairs: list[dict], weights: Optional[dict] = None):
+        """
+        分析是否防骚扰（用户是否表现出反感回访/骚扰意向）
+
+        判断标准：
+        - 是 (yes): 用户明确表达反感、拒绝继续通话、表示已多次被问、威胁投诉等
+        - 否 (no): 无明显骚扰意向
+
+        Returns:
+            yes/no
+        """
+        user_text, asr_labels = await self.qa_pairs_to_user_text_and_labels(qa_pairs)
+
+        if "Qx:用户厌恶，骂脏话" in asr_labels:
+            return "yes", None
+
+        ### 1. 检查 user_text (关键词匹配)
+        high_count = 0
+        for keyword in HARASSMENT_KEYWORDS['high']:
+            if keyword in user_text:
+                high_count += 1
+
+        # 只要命中关键词，即判定为有骚扰风险
+        if high_count >= 1:
+            text_label = "yes"
+            text_conf = min(0.85 + 0.03 * (high_count - 1), 0.95)
+        else:
+            text_label = "no"
+            text_conf = 0.30
+
+        ##### 2. llm预测
+        cleaned = []
+        for record in qa_pairs:
+            r = dict(record)
+            r.pop("tags", None)
+            cleaned.append(r)
+        result_str = json.dumps(
+            cleaned,
+            ensure_ascii=False,
+        )
+        # 调用 LLM 进行语义分析，判断是否有骚扰/反感意向
+        result = await self.llm_service.portrait_analysis_llm(result_str, portrait_label="harassment")
+        llm_label = result.get("label")  # 期望返回 "yes" 或 "no"
+        llm_conf = result.get("confidence", 0.0)
+
+        # 默认权重：文本规则为主 (60%)，LLM为辅 (40%)
+        weights = weights or {"text": 0.6, "llm": 0.4}
+
+        scores = {"yes": 0.0, "no": 0.0}
+        used = []
+
+        if text_label in ("yes", "no") and text_conf > 0 and weights["text"] > 0:
+            scores[text_label] += weights["text"] * text_conf
+            used.append({"label": text_label, "confidence": text_conf, "weight": weights["text"]})
+
+        if llm_label in ("yes", "no") and llm_conf > 0 and weights["llm"] > 0:
+            scores[llm_label] += weights["llm"] * llm_conf
+            used.append({"label": llm_label, "confidence": llm_conf, "weight": weights["llm"]})
+
+        # tie-break：若都为0，则默认为无骚扰风险
+        if max(scores.values()) == 0:
+            return "no", llm_label
+
+        final_label = max(scores, key=scores.get)
+        final_score = scores[final_label]
+
+        # 可选：如果分值非常接近，可以设定阈值，但此处二分类通常直接取最大值
+        return final_label, llm_label
 
     async def aggregate_multi_calls(
         self,
